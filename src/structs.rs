@@ -34,7 +34,7 @@ impl IconString {
 #[derive(Debug, Clone, Default)]
 pub struct DesktopEntry {
     /// This specification defines 3 types of desktop entries: Application (type 1), Link (type 2) and Directory (type 3). To allow the addition of new types in the future, implementations should ignore desktop entries with an unknown type.
-    pub enry_type: String,
+    pub entry_type: String,
     /// Version of the Desktop Entry Specification that the desktop entry conforms with. Entries that confirm with this version of the specification should use 1.5. Note that the version field is not required to be present.
     pub version: String,
     /// Specific name of the application, for example "Mozilla".
@@ -93,8 +93,30 @@ pub struct DesktopEntry {
     pub single_main_window: Option<bool>,
 }
 
+impl DesktopEntry {
+    pub fn derive_action(&self) -> DesktopAction {
+        DesktopAction {
+            name: None,
+            exec: None,
+            icon: self.icon.clone(),
+        }
+    }
+}
+
+#[derive(Default, Clone, Debug)]
+pub struct DesktopAction {
+    pub name: Option<LocaleString>,
+    pub exec: Option<String>,
+    pub icon: Option<IconString>,
+}
+
+#[derive(Default, Clone, Debug)]
+pub struct DesktopFile {
+    pub entry: DesktopEntry,
+    pub actions: Vec<DesktopAction>,
+}
+
 #[derive(Debug, Clone, Error)]
-#[doc(hidden)]
 pub enum ParseError {
     #[error("Parse Error: Unacceptable character {ch:?} at line {row:?} column {col:?}, message: {msg:?}")]
     UnacceptableCharacter {
@@ -105,6 +127,10 @@ pub enum ParseError {
     },
     #[error("Parse Error: Syntax error at line {row:?} column {col:?}, message: {msg:?}")]
     Syntax { msg: String, row: usize, col: usize },
+    #[error("Parse Error: repetitive entry at line {row:?} column {col:?}, message: {msg:?}. There should be only one entry on top of the file")]
+    RepetitiveEntry { msg: String, row: usize, col: usize },
+    #[error("Parse Error: format error at line {row:?} column {col:?}, message: {msg:?}. The first heaedr should only be about an entry")]
+    FormatError { msg: String, row: usize, col: usize },
     #[error("Parse Error: Internal error at line {row:?} column {col:?}, message: {msg:?}")]
     InternalError { msg: String, row: usize, col: usize },
 }

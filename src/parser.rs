@@ -1,9 +1,17 @@
-use crate::{structs::ParseError, Header, Value};
+use crate::{
+    structs::ParseError, DesktopAction, DesktopEntry, DesktopFile, Header, IconString, LocaleString,
+};
 
 #[derive(Debug)]
 enum LineType {
     Header,
     ValPair,
+}
+
+#[derive(Debug)]
+enum EntryType<'a> {
+    Entry(&'a mut DesktopEntry),
+    Action(&'a mut DesktopAction),
 }
 
 #[derive(Debug)]
@@ -60,6 +68,15 @@ struct Character<'a> {
     content: &'a str,
     line_number: usize,
     col_number: usize,
+}
+
+#[derive(Debug)]
+enum Value {
+    String(String),
+    LocaleString(LocaleString),
+    IconString(IconString),
+    Boolean(bool),
+    Number(f64),
 }
 
 fn filter_lines(input: &str) -> Vec<Line> {
@@ -138,29 +155,71 @@ fn parse_header(input: &Line) -> Result<Header, ParseError> {
     }
 }
 
-fn parse_val_pair(line: &str) -> Option<LineType> {
-    let mut split = line.split("=");
-
-    let key = split.next()?;
-    let val = split.next()?;
-
-    let val = val
-        .split(";")
-        .map(|s| s.to_string())
-        .collect::<Vec<String>>();
-
-    None
+fn parse_val_pair(line: &Line) -> Result<(String, Value), ParseError> {
+    // TODO: refactor it so that it takes in the target reference to fill out info to
 }
 
-fn process_single_line(line: &Line) {
-    match line.line_type() {
-        LineType::Header => {}
-        LineType::ValPair => {}
+pub fn parse(input: &str) -> Result<DesktopFile, ParseError> {
+    let lines = filter_lines(input);
+    let mut result_entry = DesktopEntry::default();
+
+    let mut is_entry_found = false;
+    let mut is_first_entry = true;
+
+    let mut result_actions: Vec<DesktopAction> = vec![];
+    let mut current_target = EntryType::Entry(&mut result_entry);
+
+    for line in lines.iter() {
+        match current_target {
+            EntryType::Entry(ref entry_ref) => match line.line_type() {
+                LineType::Header => {
+                    match parse_header(line)? {
+                        Header::DesktopEntry => {
+                            if is_entry_found {
+                                return Err(ParseError::RepetitiveEntry {
+                                    msg: "none".into(),
+                                    row: line.line_number,
+                                    col: 0,
+                                });
+                            } else {
+                                is_entry_found = true;
+                            }
+
+                            if !is_first_entry {
+                                return Err(ParseError::InternalError { msg: "it should be able to return error when entry is not in the first header".into(), row: line.line_number, col: 0 });
+                            } else {
+                                is_first_entry = false;
+                            }
+                        }
+                        Header::DesktopAction { name } => {
+                            if !is_entry_found {
+                                return Err(ParseError::InternalError { msg: "it should be able to return error when an action appears before an entry".into(), row: line.line_number, col: 0 });
+                            }
+
+                            if is_first_entry {
+                                return Err(ParseError::FormatError {
+                                    msg: "none".into(),
+                                    row: line.line_number,
+                                    col: 0,
+                                });
+                            }
+
+                            result_actions.push(DesktopAction::default());
+                            current_target = EntryType::Action(result_actions.last_mut().unwrap());
+                        }
+                        _ => {}
+                    };
+                }
+                LineType::ValPair => {}
+            },
+            EntryType::Action(ref action_ref) => {}
+        }
     }
-}
 
-pub fn parse_token(input: &str) -> Vec<String> {
-    vec![]
+    Ok(DesktopFile {
+        entry: result_entry,
+        actions: result_actions,
+    })
 }
 
 #[cfg(test)]
