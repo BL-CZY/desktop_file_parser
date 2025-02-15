@@ -155,8 +155,93 @@ fn parse_header(input: &Line) -> Result<Header, ParseError> {
     }
 }
 
-fn parse_val_pair(line: &Line) -> Result<(String, Value), ParseError> {
-    // TODO: refactor it so that it takes in the target reference to fill out info to
+/// Contains the parsed info of a key value line
+struct LinePart {
+    key: String,
+    locale: Option<String>,
+    value: String,
+}
+
+fn split_into_parts(line: &Line) -> Result<LinePart, ParseError> {
+    enum State {
+        /// the initial key parser
+        Key,
+        /// the locale parser
+        KeyLocale,
+        /// the character that ends the locale spec
+        LocaleToValue,
+        /// the value
+        Value,
+    }
+
+    let mut result = LinePart {
+        key: "".into(),
+        locale: None,
+        value: "".into(),
+    };
+
+    let mut state = State::Key;
+
+    for ch in line.content.iter() {
+        match state {
+            State::Key => match ch.content {
+                "[" => {
+                    state = State::KeyLocale;
+                    result.locale = Some("".into())
+                }
+
+                "=" => state = State::Value,
+
+                "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M"
+                | "N" | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z"
+                | "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m"
+                | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z"
+                | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "0" => {
+                    result.key.push_str(ch.content)
+                }
+
+                _ => {
+                    return Err(ParseError::Syntax {
+                        msg: "Keys shouldn't have characters other than A-Za-z0-9".into(),
+                        row: ch.line_number,
+                        col: ch.col_number,
+                    })
+                }
+            },
+
+            State::KeyLocale => match ch.content {
+                "]" => state = State::LocaleToValue,
+
+                _ => {
+                    if let Some(ref mut str) = result.locale {
+                        str.push_str(ch.content);
+                    }
+                }
+            },
+
+            State::LocaleToValue => match ch.content {
+                "=" => state = State::Value,
+
+                _ => {
+                    return Err(ParseError::Syntax {
+                        msg: "Expect \"=\" after \"=\"".into(),
+                        row: ch.line_number,
+                        col: ch.col_number,
+                    });
+                }
+            },
+
+            State::Value => match ch.content {
+                _ => result.value.push_str(ch.content),
+            },
+        }
+    }
+
+    Ok(result)
+}
+
+fn parse_val_pair(line: &Line, current: &mut EntryType) -> Result<(), ParseError> {
+    Ok(())
 }
 
 pub fn parse(input: &str) -> Result<DesktopFile, ParseError> {
