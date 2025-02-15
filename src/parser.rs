@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use crate::{
     structs::ParseError, DesktopAction, DesktopEntry, DesktopFile, Header, IconString, LocaleString,
 };
@@ -9,9 +11,9 @@ enum LineType {
 }
 
 #[derive(Debug)]
-enum EntryType<'a> {
-    Entry(&'a mut DesktopEntry),
-    Action(&'a mut DesktopAction),
+enum EntryType {
+    Entry(Rc<RefCell<DesktopEntry>>),
+    Action(Rc<RefCell<DesktopAction>>),
 }
 
 enum TokenParseState {
@@ -350,13 +352,10 @@ fn fill_entry_val(entry: &mut DesktopEntry, parts: LinePart) -> Result<(), Parse
     Ok(())
 }
 
-fn process_val_pair(line: &Line, current: &mut EntryType) -> Result<(), ParseError> {
+fn process_entry_val_pair(line: &Line, entry: &mut DesktopEntry) -> Result<(), ParseError> {
     let parts = split_into_parts(line)?;
 
-    match current {
-        EntryType::Entry(entry) => fill_entry_val(entry, parts)?,
-        _ => {}
-    }
+    fill_entry_val(entry, parts)?;
 
     Ok(())
 }
@@ -369,11 +368,11 @@ pub fn parse(input: &str) -> Result<DesktopFile, ParseError> {
     let mut is_first_entry = true;
 
     let mut result_actions: Vec<DesktopAction> = vec![];
-    let mut current_target = EntryType::Entry(&mut result_entry);
+    let mut current_target = EntryType::Entry(Rc::new(RefCell::new(result_entry)));
 
     for line in lines.iter() {
         match current_target {
-            EntryType::Entry(_) => match line.line_type() {
+            EntryType::Entry(entry) => match line.line_type() {
                 LineType::Header => {
                     match parse_header(line)? {
                         Header::DesktopEntry => {
@@ -393,7 +392,7 @@ pub fn parse(input: &str) -> Result<DesktopFile, ParseError> {
                                 is_first_entry = false;
                             }
                         }
-                        Header::DesktopAction { .. } => {
+                        Header::DesktopAction { name } => {
                             if !is_entry_found {
                                 return Err(ParseError::InternalError { msg: "it should be able to return error when an action appears before an entry".into(), row: line.line_number, col: 0 });
                             }
@@ -406,17 +405,30 @@ pub fn parse(input: &str) -> Result<DesktopFile, ParseError> {
                                 });
                             }
 
-                            result_actions.push(DesktopAction::default());
-                            current_target = EntryType::Action(result_actions.last_mut().unwrap());
+                            result_actions.push(DesktopAction {
+                                ref_name: name,
+                                ..Default::default()
+                            });
+
+                            current_target = EntryType::Action(Rc::new(RefCell::new(
+                                result_actions.last_mut().unwrap(),
+                            )));
                         }
                         _ => {}
                     };
                 }
                 LineType::ValPair => {
-                    process_val_pair(&line, &mut current_target)?;
+                    process_entry_val_pair(&line, &mut entry)?;
                 }
             },
-            EntryType::Action(ref action_ref) => {}
+            EntryType::Action(ref action_ref) => match line.line_type() {
+                LineType::Header => match parse_header(&line)? {
+                    Header::DesktopEntry => {}
+                    Header::DesktopAction { name } => {}
+                    _ => {}
+                },
+                LineType::ValPair => {}
+            },
         }
     }
 

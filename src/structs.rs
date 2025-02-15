@@ -96,6 +96,7 @@ pub struct DesktopEntry {
 impl DesktopEntry {
     pub fn derive_action(&self) -> DesktopAction {
         DesktopAction {
+            ref_name: "".into(),
             name: None,
             exec: None,
             icon: self.icon.clone(),
@@ -105,6 +106,7 @@ impl DesktopEntry {
 
 #[derive(Default, Clone, Debug)]
 pub struct DesktopAction {
+    pub ref_name: String,
     pub name: Option<LocaleString>,
     pub exec: Option<String>,
     pub icon: Option<IconString>,
