@@ -11,7 +11,7 @@ pub enum Header {
 
 #[derive(Debug, Clone, Default)]
 pub struct LocaleString {
-    pub default: Vec<String>,
+    pub default: String,
     pub variants: HashMap<String, String>,
 }
 
@@ -36,7 +36,7 @@ pub struct DesktopEntry {
     /// This specification defines 3 types of desktop entries: Application (type 1), Link (type 2) and Directory (type 3). To allow the addition of new types in the future, implementations should ignore desktop entries with an unknown type.
     pub entry_type: String,
     /// Version of the Desktop Entry Specification that the desktop entry conforms with. Entries that confirm with this version of the specification should use 1.5. Note that the version field is not required to be present.
-    pub version: String,
+    pub version: Option<String>,
     /// Specific name of the application, for example "Mozilla".
     pub name: LocaleString,
     /// Generic name of the application, for example "Web Browser".
@@ -80,11 +80,11 @@ pub struct DesktopEntry {
     /// A list of interfaces that this application implements. By default, a desktop file implements no interfaces. See Interfaces for more information on how this works.
     pub implements: Option<Vec<String>>,
     /// A list of strings which may be used in addition to other metadata to describe this entry. This can be useful e.g. to facilitate searching through entries. The values are not meant for display, and should not be redundant with the values of Name or GenericName.
-    pub keywords: Option<LocaleString>,
+    pub keywords: Option<Vec<LocaleString>>,
     /// If true, it is KNOWN that the application will send a "remove" message when started with the DESKTOP_STARTUP_ID environment variable set. If false, it is KNOWN that the application does not work with startup notification at all (does not shown any window, breaks even when using StartupWMClass, etc.). If absent, a reasonable handling is up to implementations (assuming false, using StartupWMClass, etc.). (See the [Startup Notification Protocol Specification](https://www.freedesktop.org/wiki/Specifications/startup-notification-spec/) for more details).
     pub startup_notify: Option<bool>,
     /// If specified, it is known that the application will map at least one window with the given string as its WM class or WM name hint (see the [Startup Notification Protocol Specification](https://www.freedesktop.org/wiki/Specifications/startup-notification-spec/) for more details).
-    pub startup_wm_class: Option<bool>,
+    pub startup_wm_class: Option<String>,
     /// If entry is Link type, the URL to access. Required if entry_type is link
     pub url: Option<String>,
     /// If true, the application prefers to be run on a more powerful discrete GPU if available, which we describe as “a GPU other than the default one” in this spec to avoid the need to define what a discrete GPU is and in which cases it might be considered more powerful than the default GPU. This key is only a hint and support might not be present depending on the implementation.

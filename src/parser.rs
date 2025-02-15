@@ -14,7 +14,6 @@ enum EntryType<'a> {
     Action(&'a mut DesktopAction),
 }
 
-#[derive(Debug)]
 enum TokenParseState {
     Idle,
     Header,
@@ -68,15 +67,6 @@ struct Character<'a> {
     content: &'a str,
     line_number: usize,
     col_number: usize,
-}
-
-#[derive(Debug)]
-enum Value {
-    String(String),
-    LocaleString(LocaleString),
-    IconString(IconString),
-    Boolean(bool),
-    Number(f64),
 }
 
 fn filter_lines(input: &str) -> Vec<Line> {
@@ -156,10 +146,12 @@ fn parse_header(input: &Line) -> Result<Header, ParseError> {
 }
 
 /// Contains the parsed info of a key value line
+#[derive(Clone)]
 struct LinePart {
     key: String,
     locale: Option<String>,
     value: String,
+    line_number: usize,
 }
 
 fn split_into_parts(line: &Line) -> Result<LinePart, ParseError> {
@@ -178,6 +170,7 @@ fn split_into_parts(line: &Line) -> Result<LinePart, ParseError> {
         key: "".into(),
         locale: None,
         value: "".into(),
+        line_number: line.line_number,
     };
 
     let mut state = State::Key;
@@ -240,7 +233,131 @@ fn split_into_parts(line: &Line) -> Result<LinePart, ParseError> {
     Ok(result)
 }
 
-fn parse_val_pair(line: &Line, current: &mut EntryType) -> Result<(), ParseError> {
+fn set_locale_str_property(parts: LinePart, str: &mut LocaleString) {
+    match parts.locale {
+        Some(locale) => {
+            str.variants.insert(locale, parts.value);
+        }
+        None => str.default = parts.value,
+    }
+}
+
+fn set_optional_locale_str_property(parts: LinePart, opt: &mut Option<LocaleString>) {
+    match opt {
+        Some(str) => set_locale_str_property(parts, str),
+
+        None => {
+            let mut inner = LocaleString::default();
+
+            set_locale_str_property(parts, &mut inner);
+
+            *opt = Some(inner);
+        }
+    }
+}
+
+fn set_bool(parts: LinePart, val: &mut bool) -> Result<(), ParseError> {
+    Ok(*val = parts
+        .value
+        .parse::<bool>()
+        .map_err(|_| ParseError::Syntax {
+            msg: "Property's value needs to be bool".into(),
+            row: parts.line_number,
+            col: 0,
+        })?)
+}
+
+fn set_optional_bool(parts: LinePart, opt: &mut Option<bool>) -> Result<(), ParseError> {
+    match opt {
+        Some(val) => {
+            set_bool(parts, val)?;
+        }
+        None => {
+            let mut res = false;
+            set_bool(parts, &mut res)?;
+            *opt = Some(res);
+        }
+    }
+
+    Ok(())
+}
+
+fn set_optional_list(parts: LinePart, opt: &mut Option<Vec<String>>) {
+    *opt = Some(
+        parts
+            .value
+            .split(",")
+            .map(|s| s.to_string())
+            .collect::<Vec<String>>(),
+    )
+}
+
+fn fill_entry_val(entry: &mut DesktopEntry, parts: LinePart) -> Result<(), ParseError> {
+    match parts.key.as_str() {
+        "Type" => entry.entry_type = parts.value,
+        "Version" => entry.version = Some(parts.value),
+        "Name" => set_locale_str_property(parts, &mut entry.name),
+        "GenericName" => set_optional_locale_str_property(parts, &mut entry.generic_name),
+        "NoDisplay" => set_optional_bool(parts, &mut entry.no_display)?,
+        "Comment" => set_optional_locale_str_property(parts, &mut entry.comment),
+        "Icon" => {
+            entry.icon = Some(IconString {
+                content: parts.value,
+            })
+        }
+        "Hidden" => set_optional_bool(parts, &mut entry.hidden)?,
+        "OnlyShowIn" => set_optional_list(parts, &mut entry.only_show_in),
+        "DbusActivatable" => set_optional_bool(parts, &mut entry.dbus_activatable)?,
+        "TryExec" => entry.try_exec = Some(parts.value),
+        "Exec" => entry.exec = Some(parts.value),
+        "Path" => entry.path = Some(parts.value),
+        "Terminal" => set_optional_bool(parts, &mut entry.terminal)?,
+        "Actions" => set_optional_list(parts, &mut entry.actions),
+        "MimeType" => set_optional_list(parts, &mut entry.mime_type),
+        "Categories" => set_optional_list(parts, &mut entry.categories),
+        "Implements" => set_optional_list(parts, &mut entry.implements),
+        "Keywords" => {
+            entry.keywords = Some({
+                parts
+                    .value
+                    .split(",")
+                    .map(|str| str.to_string())
+                    .map(|str| {
+                        let mut res = LocaleString::default();
+                        set_locale_str_property(
+                            LinePart {
+                                key: parts.key.clone(),
+                                locale: parts.locale.clone(),
+                                value: str,
+                                line_number: parts.line_number,
+                            },
+                            &mut res,
+                        );
+                        res
+                    })
+                    .collect::<Vec<LocaleString>>()
+            })
+        }
+        "StarupNotify" => set_optional_bool(parts, &mut entry.startup_notify)?,
+        "StartupWmClass" => entry.startup_wm_class = Some(parts.value),
+        "URL" => entry.url = Some(parts.value),
+        "PrefersNonDefaultGPU" => set_optional_bool(parts, &mut entry.prefers_non_default_gpu)?,
+        "SingleMainWindow" => set_optional_bool(parts, &mut entry.single_main_window)?,
+
+        _ => {}
+    }
+
+    Ok(())
+}
+
+fn process_val_pair(line: &Line, current: &mut EntryType) -> Result<(), ParseError> {
+    let parts = split_into_parts(line)?;
+
+    match current {
+        EntryType::Entry(entry) => fill_entry_val(entry, parts)?,
+        _ => {}
+    }
+
     Ok(())
 }
 
@@ -256,7 +373,7 @@ pub fn parse(input: &str) -> Result<DesktopFile, ParseError> {
 
     for line in lines.iter() {
         match current_target {
-            EntryType::Entry(ref entry_ref) => match line.line_type() {
+            EntryType::Entry(_) => match line.line_type() {
                 LineType::Header => {
                     match parse_header(line)? {
                         Header::DesktopEntry => {
@@ -276,7 +393,7 @@ pub fn parse(input: &str) -> Result<DesktopFile, ParseError> {
                                 is_first_entry = false;
                             }
                         }
-                        Header::DesktopAction { name } => {
+                        Header::DesktopAction { .. } => {
                             if !is_entry_found {
                                 return Err(ParseError::InternalError { msg: "it should be able to return error when an action appears before an entry".into(), row: line.line_number, col: 0 });
                             }
@@ -295,7 +412,9 @@ pub fn parse(input: &str) -> Result<DesktopFile, ParseError> {
                         _ => {}
                     };
                 }
-                LineType::ValPair => {}
+                LineType::ValPair => {
+                    process_val_pair(&line, &mut current_target)?;
+                }
             },
             EntryType::Action(ref action_ref) => {}
         }
