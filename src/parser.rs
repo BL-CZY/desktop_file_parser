@@ -13,12 +13,7 @@ enum LineType {
 #[derive(Debug)]
 enum EntryType {
     Entry(Rc<RefCell<DesktopEntry>>),
-    Action(Rc<RefCell<DesktopAction>>),
-}
-
-enum TokenParseState {
-    Idle,
-    Header,
+    Action(usize),
 }
 
 #[derive(Debug)]
@@ -355,24 +350,43 @@ fn fill_entry_val(entry: &mut DesktopEntry, parts: LinePart) -> Result<(), Parse
 fn process_entry_val_pair(line: &Line, entry: &mut DesktopEntry) -> Result<(), ParseError> {
     let parts = split_into_parts(line)?;
 
-    fill_entry_val(entry, parts)?;
+    fill_entry_val(entry, parts)
+}
+
+fn fill_action_val(entry: &mut DesktopAction, parts: LinePart) -> Result<(), ParseError> {
+    match parts.key.as_str() {
+        "Name" => set_locale_str_property(parts, &mut entry.name),
+        "Exec" => entry.exec = Some(parts.value),
+        "Icon" => {
+            entry.icon = Some(IconString {
+                content: parts.value,
+            })
+        }
+        _ => {}
+    }
 
     Ok(())
 }
 
+fn process_action_val_pair(line: &Line, action: &mut DesktopAction) -> Result<(), ParseError> {
+    let parts = split_into_parts(line)?;
+
+    fill_action_val(action, parts)
+}
+
 pub fn parse(input: &str) -> Result<DesktopFile, ParseError> {
     let lines = filter_lines(input);
-    let mut result_entry = DesktopEntry::default();
+    let result_entry = Rc::new(RefCell::new(DesktopEntry::default()));
 
     let mut is_entry_found = false;
     let mut is_first_entry = true;
 
     let mut result_actions: Vec<DesktopAction> = vec![];
-    let mut current_target = EntryType::Entry(Rc::new(RefCell::new(result_entry)));
+    let mut current_target = EntryType::Entry(result_entry.clone());
 
     for line in lines.iter() {
         match current_target {
-            EntryType::Entry(entry) => match line.line_type() {
+            EntryType::Entry(ref entry) => match line.line_type() {
                 LineType::Header => {
                     match parse_header(line)? {
                         Header::DesktopEntry => {
@@ -410,30 +424,43 @@ pub fn parse(input: &str) -> Result<DesktopFile, ParseError> {
                                 ..Default::default()
                             });
 
-                            current_target = EntryType::Action(Rc::new(RefCell::new(
-                                result_actions.last_mut().unwrap(),
-                            )));
+                            current_target = EntryType::Action(result_actions.len() - 1);
                         }
                         _ => {}
                     };
                 }
                 LineType::ValPair => {
-                    process_entry_val_pair(&line, &mut entry)?;
+                    process_entry_val_pair(&line, &mut entry.borrow_mut())?;
                 }
             },
-            EntryType::Action(ref action_ref) => match line.line_type() {
+            EntryType::Action(index) => match line.line_type() {
                 LineType::Header => match parse_header(&line)? {
-                    Header::DesktopEntry => {}
-                    Header::DesktopAction { name } => {}
+                    Header::DesktopEntry => {
+                        return Err(ParseError::RepetitiveEntry {
+                            msg: "There should only be one entry on top".into(),
+                            row: line.line_number,
+                            col: 0,
+                        });
+                    }
+                    Header::DesktopAction { name } => {
+                        result_actions.push(DesktopAction {
+                            ref_name: name,
+                            ..Default::default()
+                        });
+                        current_target = EntryType::Action(result_actions.len() - 1)
+                    }
                     _ => {}
                 },
-                LineType::ValPair => {}
+                LineType::ValPair => {
+                    let target = &mut result_actions[index];
+                    process_action_val_pair(line, target)?;
+                }
             },
         }
     }
 
     Ok(DesktopFile {
-        entry: result_entry,
+        entry: result_entry.take(),
         actions: result_actions,
     })
 }
