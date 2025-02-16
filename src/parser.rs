@@ -321,13 +321,22 @@ fn set_optional_list(parts: LinePart, opt: &mut Option<Vec<String>>) -> Result<(
         });
     }
 
-    Ok(*opt = Some(
-        parts
+    Ok(*opt = Some({
+        // TODO: specify list stuff
+        let mut res = parts
             .value
-            .split(",")
+            .split(";")
             .map(|s| s.to_string())
-            .collect::<Vec<String>>(),
-    ))
+            .collect::<Vec<String>>();
+
+        if let Some(val) = res.last() {
+            if val == "" {
+                res.pop();
+            }
+        }
+
+        res
+    }))
 }
 
 fn set_optional_str(parts: LinePart, opt: &mut Option<String>) -> Result<(), ParseError> {
@@ -377,7 +386,8 @@ fn fill_entry_val(entry: &mut DesktopEntry, parts: LinePart) -> Result<(), Parse
         "Icon" => set_optional_icon_str(parts, &mut entry.icon)?,
         "Hidden" => set_optional_bool(parts, &mut entry.hidden)?,
         "OnlyShowIn" => set_optional_list(parts, &mut entry.only_show_in)?,
-        "DbusActivatable" => set_optional_bool(parts, &mut entry.dbus_activatable)?,
+        "NotShowIn" => set_optional_list(parts, &mut entry.not_show_in)?,
+        "DBusActivatable" => set_optional_bool(parts, &mut entry.dbus_activatable)?,
         "TryExec" => set_optional_str(parts, &mut entry.try_exec)?,
         "Exec" => set_optional_str(parts, &mut entry.exec)?,
         "Path" => set_optional_str(parts, &mut entry.path)?,
@@ -387,19 +397,17 @@ fn fill_entry_val(entry: &mut DesktopEntry, parts: LinePart) -> Result<(), Parse
         "Categories" => set_optional_list(parts, &mut entry.categories)?,
         "Implements" => set_optional_list(parts, &mut entry.implements)?,
         "Keywords" => {
-            if !entry.keywords.is_none() {
-                return Err(ParseError::RepetitiveKey {
-                    key: "Keywords".into(),
-                    row: parts.line_number,
-                    col: 0,
-                });
-            }
-
-            let split = parts
+            let mut split = parts
                 .value
-                .split(",")
+                .split(";")
                 .map(|str| str.to_string())
                 .collect::<Vec<String>>();
+
+            if let Some(val) = split.last() {
+                if val == "" {
+                    split.pop();
+                }
+            }
 
             match entry.keywords {
                 Some(ref mut kwds) => match parts.locale {
@@ -441,7 +449,7 @@ fn fill_entry_val(entry: &mut DesktopEntry, parts: LinePart) -> Result<(), Parse
                 }
             }
         }
-        "StarupNotify" => set_optional_bool(parts, &mut entry.startup_notify)?,
+        "StartupNotify" => set_optional_bool(parts, &mut entry.startup_notify)?,
         "StartupWmClass" => set_optional_str(parts, &mut entry.startup_wm_class)?,
         "URL" => set_optional_str(parts, &mut entry.url)?,
         "PrefersNonDefaultGPU" => set_optional_bool(parts, &mut entry.prefers_non_default_gpu)?,

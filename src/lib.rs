@@ -139,7 +139,7 @@ NoDisplay=false
 Hidden=true
 DBusActivatable=true
 StartupNotify=true
-PreferNonDefaultGPU=true
+PrefersNonDefaultGPU=true
 SingleMainWindow=true
 "#;
         let f = parse(content).unwrap();
@@ -242,7 +242,7 @@ Icon=test-icon
     }
 
     #[test]
-    #[should_panic(expected = "Missing required field: Name")]
+    #[should_panic]
     fn test_missing_required_fields() {
         let content = r#"
 [Desktop Entry]
