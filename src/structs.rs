@@ -11,7 +11,7 @@ pub enum Header {
 
 #[derive(Debug, Clone, Default)]
 pub struct LocaleString {
-    pub default: String,
+    pub default: Option<String>, // required
     pub variants: HashMap<String, String>,
 }
 
@@ -34,11 +34,11 @@ impl IconString {
 #[derive(Debug, Clone, Default)]
 pub struct DesktopEntry {
     /// This specification defines 3 types of desktop entries: Application (type 1), Link (type 2) and Directory (type 3). To allow the addition of new types in the future, implementations should ignore desktop entries with an unknown type.
-    pub entry_type: String,
+    pub entry_type: Option<String>, // required
     /// Version of the Desktop Entry Specification that the desktop entry conforms with. Entries that confirm with this version of the specification should use 1.5. Note that the version field is not required to be present.
     pub version: Option<String>,
     /// Specific name of the application, for example "Mozilla".
-    pub name: LocaleString,
+    pub name: Option<LocaleString>, // required
     /// Generic name of the application, for example "Web Browser".
     pub generic_name: Option<LocaleString>,
     /// NoDisplay means "this application exists, but don't display it in the menus". This can be useful to e.g. associate this application with MIME types, so that it gets launched from a file manager (or other apps), without having a menu entry for it (there are tons of good reasons for this, including e.g. the netscape -remote, or kfmclient openURL kind of stuff).
@@ -97,7 +97,7 @@ impl DesktopEntry {
     pub fn derive_action(&self) -> DesktopAction {
         DesktopAction {
             ref_name: "".into(),
-            name: LocaleString::default(),
+            name: None,
             exec: None,
             icon: self.icon.clone(),
         }
@@ -108,7 +108,7 @@ impl DesktopEntry {
 pub struct DesktopAction {
     pub ref_name: String,
     // TODO: check for non-present stuff
-    pub name: LocaleString,
+    pub name: Option<LocaleString>, // required
     pub exec: Option<String>,
     pub icon: Option<IconString>,
 }
@@ -130,10 +130,12 @@ pub enum ParseError {
     },
     #[error("Parse Error: Syntax error at line {row:?} column {col:?}, message: {msg:?}")]
     Syntax { msg: String, row: usize, col: usize },
-    #[error("Parse Error: repetitive entry at line {row:?} column {col:?}, message: {msg:?}. There should be only one entry on top of the file")]
+    #[error("Parse Error: Repetitive entry at line {row:?} column {col:?}, message: {msg:?}. There should be only one entry on top of the file")]
     RepetitiveEntry { msg: String, row: usize, col: usize },
-    #[error("Parse Error: format error at line {row:?} column {col:?}, message: {msg:?}. The first heaedr should only be about an entry")]
+    #[error("Parse Error: Format error at line {row:?} column {col:?}, message: {msg:?}. The first heaedr should only be about an entry")]
     FormatError { msg: String, row: usize, col: usize },
     #[error("Parse Error: Internal error at line {row:?} column {col:?}, message: {msg:?}")]
     InternalError { msg: String, row: usize, col: usize },
+    #[error("Parse Error: Repetitive declaration of key {key:?} and of entry or action at line {row:?} column {col:?}")]
+    RepetitiveKey { key: String, row: usize, col: usize },
 }

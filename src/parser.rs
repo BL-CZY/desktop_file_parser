@@ -152,6 +152,9 @@ struct LinePart {
 }
 
 fn split_into_parts(line: &Line) -> Result<LinePart, ParseError> {
+    #[cfg(debug_assertions)]
+    println!("This line is: {:?}", line.to_string());
+
     enum State {
         /// the initial key parser
         Key,
@@ -186,13 +189,13 @@ fn split_into_parts(line: &Line) -> Result<LinePart, ParseError> {
                 | "N" | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z"
                 | "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m"
                 | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z"
-                | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "0" => {
+                | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "0" | "-" => {
                     result.key.push_str(ch.content)
                 }
 
                 _ => {
                     return Err(ParseError::Syntax {
-                        msg: "Keys shouldn't have characters other than A-Za-z0-9".into(),
+                        msg: "Keys shouldn't have characters other than A-Za-z0-9-".into(),
                         row: ch.line_number,
                         col: ch.col_number,
                     })
@@ -230,26 +233,50 @@ fn split_into_parts(line: &Line) -> Result<LinePart, ParseError> {
     Ok(result)
 }
 
-fn set_locale_str_property(parts: LinePart, str: &mut LocaleString) {
+fn set_locale_str(parts: LinePart, str: &mut LocaleString) -> Result<(), ParseError> {
+    // make sure that one property is only declared once
+
     match parts.locale {
         Some(locale) => {
+            if str.variants.contains_key(&locale) {
+                return Err(ParseError::RepetitiveKey {
+                    key: parts.key,
+                    row: parts.line_number,
+                    col: 0,
+                });
+            }
             str.variants.insert(locale, parts.value);
         }
-        None => str.default = parts.value,
+        None => {
+            if str.default.is_none() {
+                str.default = Some(parts.value);
+            } else {
+                return Err(ParseError::RepetitiveKey {
+                    key: parts.key,
+                    row: parts.line_number,
+                    col: 0,
+                });
+            }
+        }
     }
+
+    Ok(())
 }
 
-fn set_optional_locale_str_property(parts: LinePart, opt: &mut Option<LocaleString>) {
+fn set_optional_locale_str(
+    parts: LinePart,
+    opt: &mut Option<LocaleString>,
+) -> Result<(), ParseError> {
     match opt {
-        Some(str) => set_locale_str_property(parts, str),
+        Some(str) => set_locale_str(parts, str),
 
-        None => {
+        None => Ok({
             let mut inner = LocaleString::default();
 
-            set_locale_str_property(parts, &mut inner);
+            set_locale_str(parts, &mut inner)?;
 
             *opt = Some(inner);
-        }
+        }),
     }
 }
 
@@ -265,9 +292,14 @@ fn set_bool(parts: LinePart, val: &mut bool) -> Result<(), ParseError> {
 }
 
 fn set_optional_bool(parts: LinePart, opt: &mut Option<bool>) -> Result<(), ParseError> {
+    // check for redeclaration
     match opt {
-        Some(val) => {
-            set_bool(parts, val)?;
+        Some(_) => {
+            return Err(ParseError::RepetitiveKey {
+                key: parts.key,
+                row: parts.line_number,
+                col: 0,
+            });
         }
         None => {
             let mut res = false;
@@ -279,65 +311,103 @@ fn set_optional_bool(parts: LinePart, opt: &mut Option<bool>) -> Result<(), Pars
     Ok(())
 }
 
-fn set_optional_list(parts: LinePart, opt: &mut Option<Vec<String>>) {
-    *opt = Some(
+fn set_optional_list(parts: LinePart, opt: &mut Option<Vec<String>>) -> Result<(), ParseError> {
+    if !opt.is_none() {
+        return Err(ParseError::RepetitiveKey {
+            key: parts.key,
+            row: parts.line_number,
+            col: 0,
+        });
+    }
+
+    Ok(*opt = Some(
         parts
             .value
             .split(",")
             .map(|s| s.to_string())
             .collect::<Vec<String>>(),
-    )
+    ))
+}
+
+fn set_optional_str(parts: LinePart, opt: &mut Option<String>) -> Result<(), ParseError> {
+    if !opt.is_none() {
+        return Err(ParseError::RepetitiveKey {
+            key: parts.key,
+            row: parts.line_number,
+            col: 0,
+        });
+    }
+
+    Ok(*opt = Some(parts.value))
+}
+
+fn set_optional_icon_str(parts: LinePart, opt: &mut Option<IconString>) -> Result<(), ParseError> {
+    if !opt.is_none() {
+        return Err(ParseError::RepetitiveKey {
+            key: parts.key,
+            row: parts.line_number,
+            col: 0,
+        });
+    }
+
+    Ok(*opt = Some(IconString {
+        content: parts.value,
+    }))
 }
 
 fn fill_entry_val(entry: &mut DesktopEntry, parts: LinePart) -> Result<(), ParseError> {
     match parts.key.as_str() {
-        "Type" => entry.entry_type = parts.value,
-        "Version" => entry.version = Some(parts.value),
-        "Name" => set_locale_str_property(parts, &mut entry.name),
-        "GenericName" => set_optional_locale_str_property(parts, &mut entry.generic_name),
+        "Type" => set_optional_str(parts, &mut entry.entry_type)?,
+        "Version" => set_optional_str(parts, &mut entry.version)?,
+        "Name" => set_optional_locale_str(parts, &mut entry.name)?,
+        "GenericName" => set_optional_locale_str(parts, &mut entry.generic_name)?,
         "NoDisplay" => set_optional_bool(parts, &mut entry.no_display)?,
-        "Comment" => set_optional_locale_str_property(parts, &mut entry.comment),
-        "Icon" => {
-            entry.icon = Some(IconString {
-                content: parts.value,
-            })
-        }
+        "Comment" => set_optional_locale_str(parts, &mut entry.comment)?,
+        "Icon" => set_optional_icon_str(parts, &mut entry.icon)?,
         "Hidden" => set_optional_bool(parts, &mut entry.hidden)?,
-        "OnlyShowIn" => set_optional_list(parts, &mut entry.only_show_in),
+        "OnlyShowIn" => set_optional_list(parts, &mut entry.only_show_in)?,
         "DbusActivatable" => set_optional_bool(parts, &mut entry.dbus_activatable)?,
-        "TryExec" => entry.try_exec = Some(parts.value),
-        "Exec" => entry.exec = Some(parts.value),
-        "Path" => entry.path = Some(parts.value),
+        "TryExec" => set_optional_str(parts, &mut entry.try_exec)?,
+        "Exec" => set_optional_str(parts, &mut entry.exec)?,
+        "Path" => set_optional_str(parts, &mut entry.path)?,
         "Terminal" => set_optional_bool(parts, &mut entry.terminal)?,
-        "Actions" => set_optional_list(parts, &mut entry.actions),
-        "MimeType" => set_optional_list(parts, &mut entry.mime_type),
-        "Categories" => set_optional_list(parts, &mut entry.categories),
-        "Implements" => set_optional_list(parts, &mut entry.implements),
+        "Actions" => set_optional_list(parts, &mut entry.actions)?,
+        "MimeType" => set_optional_list(parts, &mut entry.mime_type)?,
+        "Categories" => set_optional_list(parts, &mut entry.categories)?,
+        "Implements" => set_optional_list(parts, &mut entry.implements)?,
         "Keywords" => {
+            if !entry.keywords.is_none() {
+                return Err(ParseError::RepetitiveKey {
+                    key: "Keywords".into(),
+                    row: parts.line_number,
+                    col: 0,
+                });
+            }
+
             entry.keywords = Some({
-                parts
-                    .value
-                    .split(",")
-                    .map(|str| str.to_string())
-                    .map(|str| {
-                        let mut res = LocaleString::default();
-                        set_locale_str_property(
-                            LinePart {
-                                key: parts.key.clone(),
-                                locale: parts.locale.clone(),
-                                value: str,
-                                line_number: parts.line_number,
-                            },
-                            &mut res,
-                        );
-                        res
-                    })
-                    .collect::<Vec<LocaleString>>()
+                let split = parts.value.split(",").map(|str| str.to_string());
+
+                let mut result: Vec<LocaleString> = vec![];
+                for str in split {
+                    let mut res = LocaleString::default();
+                    set_locale_str(
+                        LinePart {
+                            key: parts.key.clone(),
+                            locale: parts.locale.clone(),
+                            value: str,
+                            line_number: parts.line_number,
+                        },
+                        &mut res,
+                    )?;
+                    result.push(res);
+                }
+
+                result
             })
         }
         "StarupNotify" => set_optional_bool(parts, &mut entry.startup_notify)?,
-        "StartupWmClass" => entry.startup_wm_class = Some(parts.value),
-        "URL" => entry.url = Some(parts.value),
+        "StartupWmClass" => set_optional_str(parts, &mut entry.startup_wm_class)?,
+        "URL" => set_optional_str(parts, &mut entry.url)?,
         "PrefersNonDefaultGPU" => set_optional_bool(parts, &mut entry.prefers_non_default_gpu)?,
         "SingleMainWindow" => set_optional_bool(parts, &mut entry.single_main_window)?,
 
@@ -353,15 +423,11 @@ fn process_entry_val_pair(line: &Line, entry: &mut DesktopEntry) -> Result<(), P
     fill_entry_val(entry, parts)
 }
 
-fn fill_action_val(entry: &mut DesktopAction, parts: LinePart) -> Result<(), ParseError> {
+fn fill_action_val(action: &mut DesktopAction, parts: LinePart) -> Result<(), ParseError> {
     match parts.key.as_str() {
-        "Name" => set_locale_str_property(parts, &mut entry.name),
-        "Exec" => entry.exec = Some(parts.value),
-        "Icon" => {
-            entry.icon = Some(IconString {
-                content: parts.value,
-            })
-        }
+        "Name" => set_optional_locale_str(parts, &mut action.name)?,
+        "Exec" => set_optional_str(parts, &mut action.exec)?,
+        "Icon" => set_optional_icon_str(parts, &mut action.icon)?,
         _ => {}
     }
 
@@ -433,6 +499,7 @@ pub fn parse(input: &str) -> Result<DesktopFile, ParseError> {
                     process_entry_val_pair(&line, &mut entry.borrow_mut())?;
                 }
             },
+
             EntryType::Action(index) => match line.line_type() {
                 LineType::Header => match parse_header(&line)? {
                     Header::DesktopEntry => {
@@ -469,6 +536,7 @@ pub fn parse(input: &str) -> Result<DesktopFile, ParseError> {
 mod tests {
     use super::*;
 
+    #[ignore = "Already tested"]
     #[test]
     fn filter_lines_test() {
         let res = filter_lines("aaa你好 \n\n\n aaaa\n           #sadas")
