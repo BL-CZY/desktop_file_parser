@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 use thiserror::Error;
 
@@ -16,6 +16,12 @@ pub struct LocaleString {
 }
 
 #[derive(Debug, Clone, Default)]
+pub struct LocaleStringList {
+    pub default: Option<Vec<String>>,
+    pub variants: HashMap<String, Vec<String>>,
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct IconString {
     pub content: String,
 }
@@ -30,11 +36,49 @@ impl IconString {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum EntryType {
+    Application,
+    Link,
+    Directory,
+    Unknown(String),
+}
+
+impl FromStr for EntryType {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self::from(s))
+    }
+
+    type Err = ();
+}
+
+impl From<&str> for EntryType {
+    fn from(value: &str) -> Self {
+        match value {
+            "Application" => Self::Application,
+            "Link" => Self::Link,
+            "Directory" => Self::Directory,
+            _ => Self::Unknown(value.into()),
+        }
+    }
+}
+
+impl ToString for EntryType {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Application => "Application".into(),
+            Self::Link => "Link".into(),
+            Self::Directory => "Directory".into(),
+            Self::Unknown(s) => s.clone(),
+        }
+    }
+}
+
 /// Represents a desktop entry
 #[derive(Debug, Clone, Default)]
 pub struct DesktopEntry {
     /// This specification defines 3 types of desktop entries: Application (type 1), Link (type 2) and Directory (type 3). To allow the addition of new types in the future, implementations should ignore desktop entries with an unknown type.
-    pub entry_type: Option<String>, // required
+    pub entry_type: Option<EntryType>, // required
     /// Version of the Desktop Entry Specification that the desktop entry conforms with. Entries that confirm with this version of the specification should use 1.5. Note that the version field is not required to be present.
     pub version: Option<String>,
     /// Specific name of the application, for example "Mozilla".
@@ -80,7 +124,7 @@ pub struct DesktopEntry {
     /// A list of interfaces that this application implements. By default, a desktop file implements no interfaces. See Interfaces for more information on how this works.
     pub implements: Option<Vec<String>>,
     /// A list of strings which may be used in addition to other metadata to describe this entry. This can be useful e.g. to facilitate searching through entries. The values are not meant for display, and should not be redundant with the values of Name or GenericName.
-    pub keywords: Option<Vec<LocaleString>>,
+    pub keywords: Option<LocaleStringList>,
     /// If true, it is KNOWN that the application will send a "remove" message when started with the DESKTOP_STARTUP_ID environment variable set. If false, it is KNOWN that the application does not work with startup notification at all (does not shown any window, breaks even when using StartupWMClass, etc.). If absent, a reasonable handling is up to implementations (assuming false, using StartupWMClass, etc.). (See the [Startup Notification Protocol Specification](https://www.freedesktop.org/wiki/Specifications/startup-notification-spec/) for more details).
     pub startup_notify: Option<bool>,
     /// If specified, it is known that the application will map at least one window with the given string as its WM class or WM name hint (see the [Startup Notification Protocol Specification](https://www.freedesktop.org/wiki/Specifications/startup-notification-spec/) for more details).
@@ -138,4 +182,6 @@ pub enum ParseError {
     InternalError { msg: String, row: usize, col: usize },
     #[error("Parse Error: Repetitive declaration of key {key:?} and of entry or action at line {row:?} column {col:?}")]
     RepetitiveKey { key: String, row: usize, col: usize },
+    #[error("Parse Error: Key Error, message: {msg:?}")]
+    KeyError { msg: String },
 }

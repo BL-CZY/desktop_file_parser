@@ -1,7 +1,8 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-    structs::ParseError, DesktopAction, DesktopEntry, DesktopFile, Header, IconString, LocaleString,
+    structs::ParseError, DesktopAction, DesktopEntry, DesktopFile, Header, IconString,
+    LocaleString, LocaleStringList,
 };
 
 #[derive(Debug)]
@@ -357,7 +358,17 @@ fn set_optional_icon_str(parts: LinePart, opt: &mut Option<IconString>) -> Resul
 
 fn fill_entry_val(entry: &mut DesktopEntry, parts: LinePart) -> Result<(), ParseError> {
     match parts.key.as_str() {
-        "Type" => set_optional_str(parts, &mut entry.entry_type)?,
+        "Type" => {
+            if !entry.entry_type.is_none() {
+                return Err(ParseError::RepetitiveKey {
+                    key: "Type".into(),
+                    row: parts.line_number,
+                    col: 0,
+                });
+            }
+
+            entry.entry_type = Some(crate::EntryType::from(parts.value.as_str()));
+        }
         "Version" => set_optional_str(parts, &mut entry.version)?,
         "Name" => set_optional_locale_str(parts, &mut entry.name)?,
         "GenericName" => set_optional_locale_str(parts, &mut entry.generic_name)?,
@@ -384,26 +395,51 @@ fn fill_entry_val(entry: &mut DesktopEntry, parts: LinePart) -> Result<(), Parse
                 });
             }
 
-            entry.keywords = Some({
-                let split = parts.value.split(",").map(|str| str.to_string());
+            let split = parts
+                .value
+                .split(",")
+                .map(|str| str.to_string())
+                .collect::<Vec<String>>();
 
-                let mut result: Vec<LocaleString> = vec![];
-                for str in split {
-                    let mut res = LocaleString::default();
-                    set_locale_str(
-                        LinePart {
-                            key: parts.key.clone(),
-                            locale: parts.locale.clone(),
-                            value: str,
-                            line_number: parts.line_number,
-                        },
-                        &mut res,
-                    )?;
-                    result.push(res);
+            match entry.keywords {
+                Some(ref mut kwds) => match parts.locale {
+                    Some(locale) => {
+                        if kwds.variants.contains_key(&locale) {
+                            return Err(ParseError::RepetitiveKey {
+                                key: "Keywords".into(),
+                                row: parts.line_number,
+                                col: 0,
+                            });
+                        }
+
+                        kwds.variants.insert(locale, split);
+                    }
+                    None => {
+                        if !kwds.default.is_none() {
+                            return Err(ParseError::RepetitiveKey {
+                                key: "Keywords".into(),
+                                row: parts.line_number,
+                                col: 0,
+                            });
+                        }
+
+                        kwds.default = Some(split);
+                    }
+                },
+                None => {
+                    let mut res = LocaleStringList::default();
+                    match parts.locale {
+                        Some(locale) => {
+                            res.variants.insert(locale, split);
+                        }
+                        None => {
+                            res.default = Some(split);
+                        }
+                    }
+
+                    entry.keywords = Some(res);
                 }
-
-                result
-            })
+            }
         }
         "StarupNotify" => set_optional_bool(parts, &mut entry.startup_notify)?,
         "StartupWmClass" => set_optional_str(parts, &mut entry.startup_wm_class)?,
@@ -438,6 +474,58 @@ fn process_action_val_pair(line: &Line, action: &mut DesktopAction) -> Result<()
     let parts = split_into_parts(line)?;
 
     fill_action_val(action, parts)
+}
+
+fn key_err(msg: &str) -> Result<(), ParseError> {
+    Err(ParseError::KeyError { msg: msg.into() })
+}
+
+fn check_locale_str(opt: &Option<LocaleString>, field: &str) -> Result<(), ParseError> {
+    match opt {
+        Some(v) => {
+            if v.default.is_none() {
+                key_err(&format!("The default value of {} is required", field))
+            } else {
+                Ok(())
+            }
+        }
+        _ => Ok(()),
+    }
+}
+
+fn check_entry(entry: &DesktopEntry) -> Result<(), ParseError> {
+    // check required items
+    match entry.entry_type {
+        Some(ref t) => {
+            match entry.name {
+                Some(ref n) => {
+                    if n.default.is_none() {
+                        return key_err("The default value of name is required");
+                    }
+                }
+                None => return key_err("Name is required"),
+            }
+
+            match t {
+                crate::EntryType::Link => {
+                    if entry.url.is_none() {
+                        return key_err("URL is required for Link");
+                    }
+                }
+
+                _ => {}
+            }
+        }
+        None => {
+            return key_err("Type is required");
+        }
+    }
+
+    // check locale strings
+    check_locale_str(&entry.generic_name, "GenericName")?;
+    check_locale_str(&entry.comment, "Comment")?;
+
+    Ok(())
 }
 
 pub fn parse(input: &str) -> Result<DesktopFile, ParseError> {
@@ -526,8 +614,11 @@ pub fn parse(input: &str) -> Result<DesktopFile, ParseError> {
         }
     }
 
+    let entry = result_entry.take();
+    check_entry(&entry)?;
+
     Ok(DesktopFile {
-        entry: result_entry.take(),
+        entry,
         actions: result_actions,
     })
 }
