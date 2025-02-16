@@ -151,7 +151,6 @@ impl DesktopEntry {
 #[derive(Default, Clone, Debug)]
 pub struct DesktopAction {
     pub ref_name: String,
-    // TODO: check for non-present stuff
     pub name: Option<LocaleString>, // required
     pub exec: Option<String>,
     pub icon: Option<IconString>,
