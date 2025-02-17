@@ -53,7 +53,7 @@ Categories=Network;WebBrowser;
 use freedesktop_entry::LocaleString;
 
 // Access different translations
-if let Some(de_name) = desktop_file.entry.name.variants.get("de") {
+if let Some(de_name) = desktop_file.entry.name.variants.get_variant("de") {
     println!("German name: {}", de_name);
 }
 ```
