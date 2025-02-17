@@ -1,6 +1,27 @@
 use std::collections::HashMap;
 
-use crate::{DesktopAction, DesktopEntry, EntryType, IconString, LocaleString, LocaleStringList};
+use crate::{DesktopAction, DesktopEntry, IconString, LocaleString, LocaleStringList};
+
+#[derive(Debug, Clone, Default)]
+#[doc(hidden)]
+pub enum EntryTypeInternal {
+    #[default]
+    Application,
+    Link,
+    Directory,
+    Unknown(String),
+}
+
+impl From<&str> for EntryTypeInternal {
+    fn from(value: &str) -> Self {
+        match value {
+            "Application" => Self::Application,
+            "Link" => Self::Link,
+            "Directory" => Self::Directory,
+            _ => Self::Unknown(value.into()),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Default)]
 #[doc(hidden)]
@@ -20,7 +41,7 @@ pub struct LocaleStringListInternal {
 #[doc(hidden)]
 pub struct DesktopEntryInternal {
     /// This specification defines 3 types of desktop entries: Application (type 1), Link (type 2) and Directory (type 3). To allow the addition of new types in the future, implementations should ignore desktop entries with an unknown type.
-    pub entry_type: Option<EntryType>, // required
+    pub entry_type: Option<EntryTypeInternal>, // required
     /// Version of the Desktop Entry Specification that the desktop entry conforms with. Entries that confirm with this version of the specification should use 1.5. Note that the version field is not required to be present.
     pub version: Option<String>,
     /// Specific name of the application, for example "Mozilla".

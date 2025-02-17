@@ -1,3 +1,4 @@
+use crate::internal_structs::EntryTypeInternal;
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
@@ -392,7 +393,9 @@ fn fill_entry_val(entry: &mut DesktopEntryInternal, parts: LinePart) -> Result<(
                 });
             }
 
-            entry.entry_type = Some(crate::EntryType::from(parts.value.as_str()));
+            entry.entry_type = Some(crate::internal_structs::EntryTypeInternal::from(
+                parts.value.as_str(),
+            ));
         }
         "Version" => set_optional_str(parts, &mut entry.version)?,
         "Name" => set_optional_locale_str(parts, &mut entry.name)?,
@@ -534,7 +537,7 @@ fn check_entry(entry: &DesktopEntryInternal) -> Result<(), ParseError> {
             }
 
             match t {
-                crate::EntryType::Link => {
+                EntryTypeInternal::Link => {
                     if entry.url.is_none() {
                         return key_err("URL is required for Link");
                     }

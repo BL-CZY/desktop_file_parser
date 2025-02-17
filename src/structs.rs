@@ -37,12 +37,48 @@ impl IconString {
 }
 
 #[derive(Debug, Clone, Default)]
+pub struct ApplicationFields {
+    /// Path to an executable file on disk used to determine if the program is actually installed. If the path is not an absolute path, the file is looked up in the $PATH environment variable. If the file is not present or if it is not executable, the entry may be ignored (not be used in menus, for example).
+    pub try_exec: Option<String>,
+    /// Program to execute, possibly with arguments. See the Exec key for details on how this key works. The Exec key is required if DBusActivatable is not set to true. Even if DBusActivatable is true, Exec should be specified for compatibility with implementations that do not understand DBusActivatable.
+    pub exec: Option<String>,
+    /// If entry is of type Application, the working directory to run the program in.
+    pub path: Option<String>,
+    /// Whether the program runs in a terminal window.
+    pub terminal: Option<bool>,
+    /// Identifiers for application actions. This can be used to tell the application to make a specific action, different from the default behavior. The Application actions section describes how actions work.
+    pub actions: Option<Vec<String>>,
+    /// The MIME type(s) supported by this application.
+    pub mime_type: Option<Vec<String>>,
+    /// Categories in which the entry should be shown in a menu (for possible values see the Desktop Menu Specification).
+    pub categories: Option<Vec<String>>,
+    /// A list of interfaces that this application implements. By default, a desktop file implements no interfaces. See Interfaces for more information on how this works.
+    pub implements: Option<Vec<String>>,
+    /// A list of strings which may be used in addition to other metadata to describe this entry. This can be useful e.g. to facilitate searching through entries. The values are not meant for display, and should not be redundant with the values of Name or GenericName.
+    pub keywords: Option<LocaleStringList>,
+    /// If true, it is KNOWN that the application will send a "remove" message when started with the DESKTOP_STARTUP_ID environment variable set. If false, it is KNOWN that the application does not work with startup notification at all (does not shown any window, breaks even when using StartupWMClass, etc.). If absent, a reasonable handling is up to implementations (assuming false, using StartupWMClass, etc.). (See the [Startup Notification Protocol Specification](https://www.freedesktop.org/wiki/Specifications/startup-notification-spec/) for more details).
+    pub startup_notify: Option<bool>,
+    /// If specified, it is known that the application will map at least one window with the given string as its WM class or WM name hint (see the [Startup Notification Protocol Specification](https://www.freedesktop.org/wiki/Specifications/startup-notification-spec/) for more details).
+    pub startup_wm_class: Option<String>,
+    /// If true, the application prefers to be run on a more powerful discrete GPU if available, which we describe as “a GPU other than the default one” in this spec to avoid the need to define what a discrete GPU is and in which cases it might be considered more powerful than the default GPU. This key is only a hint and support might not be present depending on the implementation.
+    pub prefers_non_default_gpu: Option<bool>,
+    /// If true, the application has a single main window, and does not support having an additional one opened. This key is used to signal to the implementation to avoid offering a UI to launch another window of the app. This key is only a hint and support might not be present depending on the implementation.
+    pub single_main_window: Option<bool>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct LinkFields {
+    /// If entry is Link type, the URL to access. Required if entry_type is link
+    pub url: Option<String>,
+}
+
+#[derive(Debug, Clone, Default)]
 pub enum EntryType {
-    #[default]
-    Application,
-    Link,
+    Application(ApplicationFields),
+    Link(LinkFields),
     Directory,
-    Unknown(String),
+    #[default]
+    Unknown,
 }
 
 impl FromStr for EntryType {
@@ -56,10 +92,10 @@ impl FromStr for EntryType {
 impl From<&str> for EntryType {
     fn from(value: &str) -> Self {
         match value {
-            "Application" => Self::Application,
-            "Link" => Self::Link,
+            "Application" => Self::Application(ApplicationFields::default()),
+            "Link" => Self::Link(LinkFields::default()),
             "Directory" => Self::Directory,
-            _ => Self::Unknown(value.into()),
+            _ => Self::Unknown,
         }
     }
 }
@@ -67,10 +103,10 @@ impl From<&str> for EntryType {
 impl ToString for EntryType {
     fn to_string(&self) -> String {
         match self {
-            Self::Application => "Application".into(),
-            Self::Link => "Link".into(),
+            Self::Application(_) => "Application".into(),
+            Self::Link(_) => "Link".into(),
             Self::Directory => "Directory".into(),
-            Self::Unknown(s) => s.clone(),
+            Self::Unknown => "Unknown".into(),
         }
     }
 }
@@ -108,34 +144,6 @@ pub struct DesktopEntry {
     pub not_show_in: Option<Vec<String>>,
     /// A boolean value specifying if D-Bus activation is supported for this application. If this key is missing, the default value is false. If the value is true then implementations should ignore the Exec key and send a D-Bus message to launch the application. See D-Bus Activation for more information on how this works. Applications should still include Exec= lines in their desktop files for compatibility with implementations that do not understand the DBusActivatable key.
     pub dbus_activatable: Option<bool>,
-    /// Path to an executable file on disk used to determine if the program is actually installed. If the path is not an absolute path, the file is looked up in the $PATH environment variable. If the file is not present or if it is not executable, the entry may be ignored (not be used in menus, for example).
-    pub try_exec: Option<String>,
-    /// Program to execute, possibly with arguments. See the Exec key for details on how this key works. The Exec key is required if DBusActivatable is not set to true. Even if DBusActivatable is true, Exec should be specified for compatibility with implementations that do not understand DBusActivatable.
-    pub exec: Option<String>,
-    /// If entry is of type Application, the working directory to run the program in.
-    pub path: Option<String>,
-    /// Whether the program runs in a terminal window.
-    pub terminal: Option<bool>,
-    /// Identifiers for application actions. This can be used to tell the application to make a specific action, different from the default behavior. The Application actions section describes how actions work.
-    pub actions: Option<Vec<String>>,
-    /// The MIME type(s) supported by this application.
-    pub mime_type: Option<Vec<String>>,
-    /// Categories in which the entry should be shown in a menu (for possible values see the Desktop Menu Specification).
-    pub categories: Option<Vec<String>>,
-    /// A list of interfaces that this application implements. By default, a desktop file implements no interfaces. See Interfaces for more information on how this works.
-    pub implements: Option<Vec<String>>,
-    /// A list of strings which may be used in addition to other metadata to describe this entry. This can be useful e.g. to facilitate searching through entries. The values are not meant for display, and should not be redundant with the values of Name or GenericName.
-    pub keywords: Option<LocaleStringList>,
-    /// If true, it is KNOWN that the application will send a "remove" message when started with the DESKTOP_STARTUP_ID environment variable set. If false, it is KNOWN that the application does not work with startup notification at all (does not shown any window, breaks even when using StartupWMClass, etc.). If absent, a reasonable handling is up to implementations (assuming false, using StartupWMClass, etc.). (See the [Startup Notification Protocol Specification](https://www.freedesktop.org/wiki/Specifications/startup-notification-spec/) for more details).
-    pub startup_notify: Option<bool>,
-    /// If specified, it is known that the application will map at least one window with the given string as its WM class or WM name hint (see the [Startup Notification Protocol Specification](https://www.freedesktop.org/wiki/Specifications/startup-notification-spec/) for more details).
-    pub startup_wm_class: Option<String>,
-    /// If entry is Link type, the URL to access. Required if entry_type is link
-    pub url: Option<String>,
-    /// If true, the application prefers to be run on a more powerful discrete GPU if available, which we describe as “a GPU other than the default one” in this spec to avoid the need to define what a discrete GPU is and in which cases it might be considered more powerful than the default GPU. This key is only a hint and support might not be present depending on the implementation.
-    pub prefers_non_default_gpu: Option<bool>,
-    /// If true, the application has a single main window, and does not support having an additional one opened. This key is used to signal to the implementation to avoid offering a UI to launch another window of the app. This key is only a hint and support might not be present depending on the implementation.
-    pub single_main_window: Option<bool>,
 }
 
 impl DesktopEntry {
