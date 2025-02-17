@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use crate::{DesktopAction, DesktopEntry, IconString, LocaleString, LocaleStringList};
+use crate::{
+    ApplicationFields, DesktopAction, DesktopEntry, EntryType, IconString, LinkFields,
+    LocaleString, LocaleStringList, ParseError,
+};
 
 #[derive(Debug, Clone, Default)]
 #[doc(hidden)]
@@ -109,48 +112,128 @@ pub struct DesktopActionInternal {
     pub icon: Option<IconString>,
 }
 
-impl Into<LocaleString> for LocaleStringInternal {
-    fn into(self) -> LocaleString {
-        LocaleString {
-            default: self.default.unwrap(),
+impl TryInto<LocaleString> for LocaleStringInternal {
+    type Error = ParseError;
+
+    fn try_into(self) -> Result<LocaleString, Self::Error> {
+        Ok(LocaleString {
+            default: match self.default {
+                Some(d) => d,
+                None => {
+                    return Err(ParseError::KeyError {
+                        msg: "The default value of locale string must be specified".into(),
+                    })
+                }
+            },
             variants: self.variants,
-        }
+        })
     }
 }
 
-impl Into<LocaleStringList> for LocaleStringListInternal {
-    fn into(self) -> LocaleStringList {
-        LocaleStringList {
-            default: self.default.unwrap(),
+impl TryInto<LocaleStringList> for LocaleStringListInternal {
+    type Error = ParseError;
+
+    fn try_into(self) -> Result<LocaleStringList, Self::Error> {
+        Ok(LocaleStringList {
+            default: match self.default {
+                Some(d) => d,
+                None => {
+                    return Err(ParseError::KeyError {
+                        msg: "The default value of locale string must be specified".into(),
+                    })
+                }
+            },
             variants: self.variants,
-        }
+        })
     }
 }
 
-impl Into<DesktopAction> for DesktopActionInternal {
-    fn into(self) -> DesktopAction {
-        DesktopAction {
+impl TryInto<DesktopAction> for DesktopActionInternal {
+    type Error = ParseError;
+
+    fn try_into(self) -> Result<DesktopAction, Self::Error> {
+        Ok(DesktopAction {
             ref_name: self.ref_name,
-            name: self.name.unwrap().into(),
+            name: match self.name {
+                Some(n) => n.try_into()?,
+                None => {
+                    return Err(ParseError::KeyError {
+                        msg: "The name of an action must be specified".into(),
+                    })
+                }
+            },
             exec: self.exec,
             icon: self.icon,
-        }
+        })
     }
 }
 
-impl Into<DesktopEntry> for DesktopEntryInternal {
-    fn into(self) -> DesktopEntry {
-        DesktopEntry {
-            entry_type: self.entry_type.unwrap(),
+impl TryInto<DesktopEntry> for DesktopEntryInternal {
+    type Error = ParseError;
+
+    fn try_into(self) -> Result<DesktopEntry, Self::Error> {
+        let entry_type: EntryType = match self.entry_type {
+            Some(EntryTypeInternal::Application) => {
+                let fields = ApplicationFields {
+                    try_exec: self.try_exec,
+                    exec: self.exec,
+                    path: self.path,
+                    terminal: self.terminal,
+                    actions: self.actions,
+                    mime_type: self.mime_type,
+                    categories: self.categories,
+                    implements: self.implements,
+                    keywords: match self.keywords {
+                        Some(l) => Some(l.try_into()?),
+                        None => None,
+                    },
+                    startup_notify: self.startup_notify,
+                    startup_wm_class: self.startup_wm_class,
+                    prefers_non_default_gpu: self.prefers_non_default_gpu,
+                    single_main_window: self.single_main_window,
+                };
+                EntryType::Application(fields)
+            }
+            Some(EntryTypeInternal::Link) => {
+                let fields = LinkFields {
+                    url: match self.url {
+                        Some(url) => url,
+                        None => {
+                            return Err(ParseError::KeyError {
+                                msg: "URL must be specified for the entry type Link".into(),
+                            })
+                        }
+                    },
+                };
+                EntryType::Link(fields)
+            }
+            Some(EntryTypeInternal::Directory) => EntryType::Directory,
+            None => {
+                return Err(ParseError::KeyError {
+                    msg: "Entry Type must be specified".into(),
+                })
+            }
+            _ => EntryType::Unknown,
+        };
+
+        Ok(DesktopEntry {
+            entry_type,
             version: self.version,
-            name: self.name.unwrap().into(),
+            name: match self.name {
+                Some(n) => n.try_into()?,
+                None => {
+                    return Err(ParseError::KeyError {
+                        msg: "Entry name must be specified".into(),
+                    })
+                }
+            },
             generic_name: match self.generic_name {
-                Some(l) => Some(l.into()),
+                Some(l) => Some(l.try_into()?),
                 None => None,
             },
             no_display: self.no_display,
             comment: match self.comment {
-                Some(l) => Some(l.into()),
+                Some(l) => Some(l.try_into()?),
                 None => None,
             },
             icon: self.icon,
@@ -158,23 +241,6 @@ impl Into<DesktopEntry> for DesktopEntryInternal {
             only_show_in: self.only_show_in,
             not_show_in: self.not_show_in,
             dbus_activatable: self.dbus_activatable,
-            try_exec: self.try_exec,
-            exec: self.exec,
-            path: self.path,
-            terminal: self.terminal,
-            actions: self.actions,
-            mime_type: self.mime_type,
-            categories: self.categories,
-            implements: self.implements,
-            keywords: match self.keywords {
-                Some(l) => Some(l.into()),
-                None => None,
-            },
-            startup_notify: self.startup_notify,
-            startup_wm_class: self.startup_wm_class,
-            url: self.url,
-            prefers_non_default_gpu: self.prefers_non_default_gpu,
-            single_main_window: self.single_main_window,
-        }
+        })
     }
 }

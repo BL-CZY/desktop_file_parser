@@ -510,54 +510,6 @@ fn key_err(msg: &str) -> Result<(), ParseError> {
     Err(ParseError::KeyError { msg: msg.into() })
 }
 
-fn check_locale_str(opt: &Option<LocaleStringInternal>, field: &str) -> Result<(), ParseError> {
-    match opt {
-        Some(v) => {
-            if v.default.is_none() {
-                key_err(&format!("The default value of {} is required", field))
-            } else {
-                Ok(())
-            }
-        }
-        _ => Ok(()),
-    }
-}
-
-fn check_entry(entry: &DesktopEntryInternal) -> Result<(), ParseError> {
-    // check required items
-    match entry.entry_type {
-        Some(ref t) => {
-            match entry.name {
-                Some(ref n) => {
-                    if n.default.is_none() {
-                        return key_err("The default value of name is required");
-                    }
-                }
-                None => return key_err("Name is required"),
-            }
-
-            match t {
-                EntryTypeInternal::Link => {
-                    if entry.url.is_none() {
-                        return key_err("URL is required for Link");
-                    }
-                }
-
-                _ => {}
-            }
-        }
-        None => {
-            return key_err("Type is required");
-        }
-    }
-
-    // check locale strings
-    check_locale_str(&entry.generic_name, "GenericName")?;
-    check_locale_str(&entry.comment, "Comment")?;
-
-    Ok(())
-}
-
 pub fn parse(input: &str) -> Result<DesktopFile, ParseError> {
     let mut lines = filter_lines(input);
     let result_entry = Rc::new(RefCell::new(DesktopEntryInternal::default()));
@@ -645,11 +597,16 @@ pub fn parse(input: &str) -> Result<DesktopFile, ParseError> {
     }
 
     let entry = result_entry.take();
-    check_entry(&entry)?;
 
     Ok(DesktopFile {
-        entry: entry.into(),
-        actions: result_actions.into_iter().map(Into::into).collect(),
+        entry: entry.try_into()?,
+        actions: result_actions
+            .into_iter()
+            .filter_map(|e| match e.try_into() {
+                Ok(val) => Some(val),
+                Err(_) => None,
+            })
+            .collect(),
     })
 }
 

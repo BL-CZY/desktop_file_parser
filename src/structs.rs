@@ -69,7 +69,7 @@ pub struct ApplicationFields {
 #[derive(Debug, Clone, Default)]
 pub struct LinkFields {
     /// If entry is Link type, the URL to access. Required if entry_type is link
-    pub url: Option<String>,
+    pub url: String,
 }
 
 #[derive(Debug, Clone, Default)]
