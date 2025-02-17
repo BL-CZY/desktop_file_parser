@@ -3,10 +3,11 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
     internal_structs::{
-        DesktopActionInternal, DesktopEntryInternal, LocaleStringInternal, LocaleStringListInternal,
+        DesktopActionInternal, DesktopEntryInternal, Header, LocaleStringInternal,
+        LocaleStringListInternal,
     },
     structs::ParseError,
-    DesktopFile, Header, IconString,
+    DesktopFile, IconString,
 };
 
 #[derive(Debug)]
@@ -506,6 +507,25 @@ fn process_action_val_pair(
     fill_action_val(action, parts)
 }
 
+/// Parses a desktop file's content into a structured DesktopFile.
+///
+/// # Arguments
+/// * `input` - The string content of a .desktop file
+///
+/// # Returns
+/// * `Ok(DesktopFile)` - Successfully parsed desktop file with all entries and actions
+/// * `Err(ParseError)` - If the file cannot be parsed or is missing required fields
+///
+/// # Examples
+/// ```
+/// let content = r#"[Desktop Entry]
+/// Type=Application
+/// Name=Firefox
+/// Exec=firefox %u"#;
+///
+/// let desktop_file = parse(content)?;
+/// assert_eq!(desktop_file.entry.name.default, "Firefox");
+/// ```
 pub fn parse(input: &str) -> Result<DesktopFile, ParseError> {
     let mut lines = filter_lines(input);
     let result_entry = Rc::new(RefCell::new(DesktopEntryInternal::default()));

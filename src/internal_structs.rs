@@ -5,6 +5,14 @@ use crate::{
     LocaleString, LocaleStringList, ParseError,
 };
 
+#[derive(Debug, Clone)]
+#[doc(hidden)]
+pub enum Header {
+    DesktopEntry,
+    DesktopAction { name: String },
+    Other { name: String },
+}
+
 #[derive(Debug, Clone, Default)]
 #[doc(hidden)]
 pub enum EntryTypeInternal {

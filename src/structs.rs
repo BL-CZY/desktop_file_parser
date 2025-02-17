@@ -1,32 +1,68 @@
+//! This module provides types for parsing and representing Linux `.desktop` files according to the
+//! [freedesktop.org Desktop Entry Specification](https://specifications.freedesktop.org/desktop-entry-spec/latest/).
+//! Desktop entries are used to describe applications, shortcuts, and directories in desktop environments.
+
 use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 use thiserror::Error;
 
-#[derive(Debug, Clone)]
-pub enum Header {
-    DesktopEntry,
-    DesktopAction { name: String },
-    Other { name: String },
-}
-
+/// A string that can have different values based on the system locale.
+/// Used for internationalization of desktop entries.
 #[derive(Debug, Clone, Default)]
 pub struct LocaleString {
-    pub default: String, // required
+    /// The default value when no locale-specific variant is available
+    pub default: String,
+    /// Map of locale codes to translated strings
     pub variants: HashMap<String, String>,
 }
 
+impl LocaleString {
+    /// Get the variant of the locale string, returns the default value if not found
+    pub fn get_variant(&self, locale: &str) -> &str {
+        match self.variants.get(locale) {
+            Some(v) => v,
+            None => &self.default,
+        }
+    }
+}
+
+/// A list of strings that can vary based on the system locale.
+/// Used for internationalized lists like keywords.
 #[derive(Debug, Clone, Default)]
 pub struct LocaleStringList {
+    /// The default list when no locale-specific variant is available
     pub default: Vec<String>,
+    /// Map of locale codes to translated string lists
     pub variants: HashMap<String, Vec<String>>,
 }
 
+impl LocaleStringList {
+    /// Get the variant of the locale string, returns the default value if not found
+    pub fn get_variant(&self, locale: &str) -> &[String] {
+        match self.variants.get(locale) {
+            Some(v) => v,
+            None => &self.default,
+        }
+    }
+}
+
+/// Represents an icon specification that can be either a file path
+/// or an icon name from the system theme.
 #[derive(Debug, Clone, Default)]
 pub struct IconString {
+    /// The icon specification string
     pub content: String,
 }
 
 impl IconString {
+    /// Attempts to find the icon's full path on the system.
+    ///
+    /// First checks if the content is a direct path to an existing file.
+    /// If not, looks up the icon name in the freedesktop icon theme system.
+    ///
+    /// # Returns
+    /// - `Some(PathBuf)` if the icon is found either as a file or in the icon theme
+    /// - `None` if the icon cannot be found
     pub fn get_icon_path(&self) -> Option<PathBuf> {
         if let Ok(_) = std::fs::read(&self.content) {
             Some(self.content.clone().into())
@@ -36,6 +72,8 @@ impl IconString {
     }
 }
 
+/// Fields specific to Application type desktop entries.
+/// These fields are only valid when the entry type is Application.
 #[derive(Debug, Clone, Default)]
 pub struct ApplicationFields {
     /// Path to an executable file on disk used to determine if the program is actually installed. If the path is not an absolute path, the file is looked up in the $PATH environment variable. If the file is not present or if it is not executable, the entry may be ignored (not be used in menus, for example).
@@ -66,22 +104,31 @@ pub struct ApplicationFields {
     pub single_main_window: Option<bool>,
 }
 
+/// Fields specific to Link type desktop entries.
+/// These fields are only valid when the entry type is Link.
 #[derive(Debug, Clone, Default)]
 pub struct LinkFields {
-    /// If entry is Link type, the URL to access. Required if entry_type is link
+    /// The URL that this desktop entry points to
     pub url: String,
 }
 
+/// The type of desktop entry, which determines its behavior and required fields.
 #[derive(Debug, Clone, Default)]
 pub enum EntryType {
+    /// An application that can be launched
     Application(ApplicationFields),
+    /// A URL shortcut
     Link(LinkFields),
+    /// A directory entry, typically used in menus
     Directory,
+    /// An unknown or unsupported type
     #[default]
     Unknown,
 }
 
 impl FromStr for EntryType {
+    /// Converts a string to an EntryType.
+    /// Never fails as unknown types become EntryType::Unknown.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self::from(s))
     }
@@ -90,6 +137,9 @@ impl FromStr for EntryType {
 }
 
 impl From<&str> for EntryType {
+    /// Converts a string to an EntryType.
+    /// Recognizes "Application", "Link", and "Directory".
+    /// Any other value becomes EntryType::Unknown.
     fn from(value: &str) -> Self {
         match value {
             "Application" => Self::Application(ApplicationFields::default()),
@@ -101,6 +151,8 @@ impl From<&str> for EntryType {
 }
 
 impl ToString for EntryType {
+    /// Converts an EntryType to its string representation.
+    /// Returns "Application", "Link", "Directory", or "Unknown".
     fn to_string(&self) -> String {
         match self {
             Self::Application(_) => "Application".into(),
@@ -111,7 +163,8 @@ impl ToString for EntryType {
     }
 }
 
-/// Represents a desktop entry
+/// Represents a complete desktop entry, containing all the standard fields
+/// defined in the freedesktop.org specification.
 #[derive(Debug, Clone, Default)]
 pub struct DesktopEntry {
     /// This specification defines 3 types of desktop entries: Application (type 1), Link (type 2) and Directory (type 3). To allow the addition of new types in the future, implementations should ignore desktop entries with an unknown type.
@@ -146,26 +199,28 @@ pub struct DesktopEntry {
     pub dbus_activatable: Option<bool>,
 }
 
-impl DesktopEntry {
-    pub fn derive_action(&self) -> DesktopAction {
-        DesktopAction {
-            name: LocaleString::default(),
-            exec: None,
-            icon: self.icon.clone(),
-        }
-    }
-}
-
+/// Represents an application action, which defines an alternative way
+/// to launch an application with different parameters.
+///
+/// Actions are defined in the desktop file and allow applications to expose
+/// multiple entry points, such as "New Window" or "Private Browsing".
 #[derive(Default, Clone, Debug)]
 pub struct DesktopAction {
-    pub name: LocaleString, // required
+    /// The name of the action, which can be localized
+    pub name: LocaleString,
+    /// The command to execute when this action is triggered
     pub exec: Option<String>,
+    /// Optional icon specific to this action
     pub icon: Option<IconString>,
 }
 
+/// Represents a complete desktop file including the main entry
+/// and all its associated actions.
 #[derive(Default, Clone, Debug)]
 pub struct DesktopFile {
+    /// The main desktop entry
     pub entry: DesktopEntry,
+    /// Map of action identifiers to their definitions
     pub actions: HashMap<String, DesktopAction>,
 }
 
