@@ -41,14 +41,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 
 [[package]]
-name = "desktop_file_parser"
-version = "0.1.0"
-dependencies = [
- "freedesktop-icons",
- "thiserror 2.0.7",
-]
-
-[[package]]
 name = "dirs"
 version = "5.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -76,6 +68,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "442039f5147480ba31067cb00ada1adae6892028e40e45fc5de7b7df6dcc1b5f"
 dependencies = [
  "const-random",
+]
+
+[[package]]
+name = "freedesktop-file-parser"
+version = "0.1.0"
+dependencies = [
+ "freedesktop-icons",
+ "thiserror 2.0.7",
 ]
 
 [[package]]
