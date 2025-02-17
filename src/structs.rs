@@ -149,7 +149,6 @@ pub struct DesktopEntry {
 impl DesktopEntry {
     pub fn derive_action(&self) -> DesktopAction {
         DesktopAction {
-            ref_name: "".into(),
             name: LocaleString::default(),
             exec: None,
             icon: self.icon.clone(),
@@ -159,7 +158,6 @@ impl DesktopEntry {
 
 #[derive(Default, Clone, Debug)]
 pub struct DesktopAction {
-    pub ref_name: String,
     pub name: LocaleString, // required
     pub exec: Option<String>,
     pub icon: Option<IconString>,
@@ -168,7 +166,7 @@ pub struct DesktopAction {
 #[derive(Default, Clone, Debug)]
 pub struct DesktopFile {
     pub entry: DesktopEntry,
-    pub actions: Vec<DesktopAction>,
+    pub actions: HashMap<String, DesktopAction>,
 }
 
 #[derive(Debug, Clone, Error)]

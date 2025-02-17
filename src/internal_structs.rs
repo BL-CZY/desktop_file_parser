@@ -148,24 +148,51 @@ impl TryInto<LocaleStringList> for LocaleStringListInternal {
     }
 }
 
-impl TryInto<DesktopAction> for DesktopActionInternal {
-    type Error = ParseError;
+pub fn vec_to_map(
+    vec: Vec<DesktopActionInternal>,
+    list: &mut [String],
+) -> Result<HashMap<String, DesktopAction>, ParseError> {
+    let mut result = HashMap::new();
+    list.sort();
 
-    fn try_into(self) -> Result<DesktopAction, Self::Error> {
-        Ok(DesktopAction {
-            ref_name: self.ref_name,
-            name: match self.name {
-                Some(n) => n.try_into()?,
-                None => {
+    for action in vec.into_iter() {
+        match list.binary_search(&action.ref_name) {
+            Ok(_) => {
+                if result.contains_key(&action.ref_name) {
                     return Err(ParseError::KeyError {
-                        msg: "The name of an action must be specified".into(),
-                    })
+                        msg: format!(
+                            "There are two actions with the same name: {}",
+                            &action.ref_name
+                        ),
+                    });
                 }
-            },
-            exec: self.exec,
-            icon: self.icon,
-        })
+
+                let name = action.ref_name.clone();
+
+                result.insert(
+                    action.ref_name,
+                    DesktopAction {
+                        name: match action.name {
+                            Some(n) => n.try_into()?,
+                            None => {
+                                return Err(ParseError::KeyError {
+                                    msg: format!(
+                                        "The name of the action {} must be specified",
+                                        name
+                                    ),
+                                })
+                            }
+                        },
+                        exec: action.exec,
+                        icon: action.icon,
+                    },
+                );
+            }
+            Err(_) => {}
+        }
     }
+
+    Ok(result)
 }
 
 impl TryInto<DesktopEntry> for DesktopEntryInternal {

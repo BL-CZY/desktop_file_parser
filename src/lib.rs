@@ -22,9 +22,14 @@ Categories=Network;WebBrowser;
         let entry = f.entry;
 
         assert_eq!(entry.name.default, "Firefox");
-        assert_eq!(entry.exec.unwrap(), "firefox %U");
-        assert!(matches!(entry.entry_type, EntryType::Application));
-        assert_eq!(entry.categories.unwrap(), vec!["Network", "WebBrowser"]);
+
+        match entry.entry_type {
+            EntryType::Application(fields) => {
+                assert_eq!(fields.exec.unwrap(), "firefox %U");
+                assert_eq!(fields.categories.unwrap(), vec!["Network", "WebBrowser"]);
+            }
+            _ => panic!("Entry type is not Application"),
+        }
     }
 
     #[test]
@@ -87,24 +92,49 @@ Exec=firefox --private-window
 
         assert_eq!(actions.len(), 2);
 
-        let new_window = &actions[0];
-        assert_eq!(new_window.ref_name, "new-window");
-        assert_eq!(new_window.name.default, "New Window");
-        assert_eq!(new_window.name.variants.get("es").unwrap(), "Nueva ventana");
-        assert_eq!(new_window.exec.as_ref().unwrap(), "firefox --new-window");
         assert_eq!(
-            new_window.icon.as_ref().unwrap().content,
+            actions.get("new-window").unwrap().name.default,
+            "New Window"
+        );
+        assert_eq!(
+            actions
+                .get("new-window")
+                .unwrap()
+                .name
+                .variants
+                .get("es")
+                .unwrap(),
+            "Nueva ventana"
+        );
+        assert_eq!(
+            actions.get("new-window").unwrap().exec.as_ref().unwrap(),
+            "firefox --new-window"
+        );
+        assert_eq!(
+            actions
+                .get("new-window")
+                .unwrap()
+                .icon
+                .as_ref()
+                .unwrap()
+                .content,
             "firefox-new-window"
         );
 
-        let private_window = &actions[1];
-        assert_eq!(private_window.ref_name, "new-private-window");
-        assert_eq!(private_window.name.default, "New Private Window");
         assert_eq!(
-            private_window.exec.as_ref().unwrap(),
+            actions.get("new-private-window").unwrap().name.default,
+            "New Private Window"
+        );
+        assert_eq!(
+            actions
+                .get("new-private-window")
+                .unwrap()
+                .exec
+                .as_ref()
+                .unwrap(),
             "firefox --private-window"
         );
-        assert!(private_window.icon.is_none());
+        assert!(actions.get("new-private-window").unwrap().icon.is_none());
     }
 
     #[test]
@@ -125,13 +155,19 @@ SingleMainWindow=true
         let f = parse(content).unwrap();
         let entry = f.entry;
 
-        assert_eq!(entry.terminal.unwrap(), true);
         assert_eq!(entry.no_display.unwrap(), false);
         assert_eq!(entry.hidden.unwrap(), true);
         assert_eq!(entry.dbus_activatable.unwrap(), true);
-        assert_eq!(entry.startup_notify.unwrap(), true);
-        assert_eq!(entry.prefers_non_default_gpu.unwrap(), true);
-        assert_eq!(entry.single_main_window.unwrap(), true);
+
+        match entry.entry_type {
+            EntryType::Application(fields) => {
+                assert_eq!(fields.terminal.unwrap(), true);
+                assert_eq!(fields.startup_notify.unwrap(), true);
+                assert_eq!(fields.prefers_non_default_gpu.unwrap(), true);
+                assert_eq!(fields.single_main_window.unwrap(), true);
+            }
+            _ => panic!("Type not Application"),
+        }
     }
 
     #[test]
@@ -151,28 +187,33 @@ Implements=org.freedesktop.Application;
 "#;
         let f = parse(content).unwrap();
         let entry = f.entry;
-
-        assert_eq!(
-            entry.categories.unwrap(),
-            vec!["Development", "IDE", "Programming"]
-        );
-        assert_eq!(
-            entry.mime_type.unwrap(),
-            vec!["text/plain", "application/x-python"]
-        );
         assert_eq!(entry.only_show_in.unwrap(), vec!["GNOME", "KDE"]);
         assert_eq!(entry.not_show_in.unwrap(), vec!["XFCE"]);
-        assert_eq!(
-            entry.implements.unwrap(),
-            vec!["org.freedesktop.Application"]
-        );
 
-        let keywords = entry.keywords.unwrap();
-        assert_eq!(keywords.default, vec!["development", "coding"]);
-        assert_eq!(
-            keywords.variants.get("es").unwrap(),
-            &vec!["desarrollo", "programación"]
-        );
+        match entry.entry_type {
+            EntryType::Application(fields) => {
+                let keywords = fields.keywords.unwrap();
+                assert_eq!(keywords.default, vec!["development", "coding"]);
+                assert_eq!(
+                    keywords.variants.get("es").unwrap(),
+                    &vec!["desarrollo", "programación"]
+                );
+
+                assert_eq!(
+                    fields.categories.unwrap(),
+                    vec!["Development", "IDE", "Programming"]
+                );
+                assert_eq!(
+                    fields.mime_type.unwrap(),
+                    vec!["text/plain", "application/x-python"]
+                );
+                assert_eq!(
+                    fields.implements.unwrap(),
+                    vec!["org.freedesktop.Application"]
+                );
+            }
+            _ => panic!("Entry type is not Application"),
+        }
     }
 
     #[test]
@@ -191,10 +232,10 @@ Implements=org.freedesktop.Application;
         let f = parse(unknown_content).unwrap();
         let unknown_entry = f.entry;
 
-        assert!(matches!(app_entry.entry_type, EntryType::Application));
-        assert!(matches!(link_entry.entry_type, EntryType::Link));
+        assert!(matches!(app_entry.entry_type, EntryType::Application(_)));
+        assert!(matches!(link_entry.entry_type, EntryType::Link(_)));
         assert!(matches!(dir_entry.entry_type, EntryType::Directory));
-        assert!(matches!(unknown_entry.entry_type, EntryType::Unknown(s) if s == "CustomType"));
+        assert!(matches!(unknown_entry.entry_type, EntryType::Unknown));
     }
 
     #[test]

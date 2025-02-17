@@ -1,5 +1,5 @@
-use crate::internal_structs::EntryTypeInternal;
-use std::{cell::RefCell, rc::Rc};
+use crate::internal_structs::vec_to_map;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
     internal_structs::{
@@ -506,10 +506,6 @@ fn process_action_val_pair(
     fill_action_val(action, parts)
 }
 
-fn key_err(msg: &str) -> Result<(), ParseError> {
-    Err(ParseError::KeyError { msg: msg.into() })
-}
-
 pub fn parse(input: &str) -> Result<DesktopFile, ParseError> {
     let mut lines = filter_lines(input);
     let result_entry = Rc::new(RefCell::new(DesktopEntryInternal::default()));
@@ -596,17 +592,15 @@ pub fn parse(input: &str) -> Result<DesktopFile, ParseError> {
         }
     }
 
-    let entry = result_entry.take();
+    let mut entry = result_entry.take();
+    let actions = match entry.actions {
+        Some(ref mut d) => vec_to_map(result_actions, d)?,
+        None => HashMap::new(),
+    };
 
     Ok(DesktopFile {
         entry: entry.try_into()?,
-        actions: result_actions
-            .into_iter()
-            .filter_map(|e| match e.try_into() {
-                Ok(val) => Some(val),
-                Err(_) => None,
-            })
-            .collect(),
+        actions,
     })
 }
 
