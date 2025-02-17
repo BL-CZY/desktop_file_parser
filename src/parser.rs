@@ -1,8 +1,11 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-    structs::ParseError, DesktopAction, DesktopEntry, DesktopFile, Header, IconString,
-    LocaleString, LocaleStringList,
+    internal_structs::{
+        DesktopActionInternal, DesktopEntryInternal, LocaleStringInternal, LocaleStringListInternal,
+    },
+    structs::ParseError,
+    DesktopFile, Header, IconString,
 };
 
 #[derive(Debug)]
@@ -13,7 +16,7 @@ enum LineType {
 
 #[derive(Debug)]
 enum EntryType {
-    Entry(Rc<RefCell<DesktopEntry>>),
+    Entry(Rc<RefCell<DesktopEntryInternal>>),
     Action(usize),
 }
 
@@ -60,7 +63,7 @@ impl<'a> ToString for Line<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Character<'a> {
     content: &'a str,
     line_number: usize,
@@ -175,6 +178,7 @@ fn split_into_parts(line: &Line) -> Result<LinePart, ParseError> {
     };
 
     let mut state = State::Key;
+    let mut key_has_space = false;
 
     for ch in line.content.iter() {
         match state {
@@ -186,12 +190,22 @@ fn split_into_parts(line: &Line) -> Result<LinePart, ParseError> {
 
                 "=" => state = State::Value,
 
+                " " => key_has_space = true,
+
                 "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M"
                 | "N" | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z"
                 | "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m"
                 | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z"
                 | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "0" | "-" => {
-                    result.key.push_str(ch.content)
+                    if !key_has_space {
+                        result.key.push_str(ch.content)
+                    } else {
+                        return Err(ParseError::Syntax {
+                            msg: "Keys shouldn't have characters other than A-Za-z0-9-".into(),
+                            row: ch.line_number,
+                            col: ch.col_number,
+                        });
+                    }
                 }
 
                 _ => {
@@ -231,10 +245,13 @@ fn split_into_parts(line: &Line) -> Result<LinePart, ParseError> {
         }
     }
 
+    result.value = result.value.trim_start().to_string();
+    result.key = result.key.trim_end().to_string();
+
     Ok(result)
 }
 
-fn set_locale_str(parts: LinePart, str: &mut LocaleString) -> Result<(), ParseError> {
+fn set_locale_str(parts: LinePart, str: &mut LocaleStringInternal) -> Result<(), ParseError> {
     // make sure that one property is only declared once
 
     match parts.locale {
@@ -266,13 +283,13 @@ fn set_locale_str(parts: LinePart, str: &mut LocaleString) -> Result<(), ParseEr
 
 fn set_optional_locale_str(
     parts: LinePart,
-    opt: &mut Option<LocaleString>,
+    opt: &mut Option<LocaleStringInternal>,
 ) -> Result<(), ParseError> {
     match opt {
         Some(str) => set_locale_str(parts, str),
 
         None => Ok({
-            let mut inner = LocaleString::default();
+            let mut inner = LocaleStringInternal::default();
 
             set_locale_str(parts, &mut inner)?;
 
@@ -322,7 +339,6 @@ fn set_optional_list(parts: LinePart, opt: &mut Option<Vec<String>>) -> Result<(
     }
 
     Ok(*opt = Some({
-        // TODO: specify list stuff
         let mut res = parts
             .value
             .split(";")
@@ -365,7 +381,7 @@ fn set_optional_icon_str(parts: LinePart, opt: &mut Option<IconString>) -> Resul
     }))
 }
 
-fn fill_entry_val(entry: &mut DesktopEntry, parts: LinePart) -> Result<(), ParseError> {
+fn fill_entry_val(entry: &mut DesktopEntryInternal, parts: LinePart) -> Result<(), ParseError> {
     match parts.key.as_str() {
         "Type" => {
             if !entry.entry_type.is_none() {
@@ -435,7 +451,7 @@ fn fill_entry_val(entry: &mut DesktopEntry, parts: LinePart) -> Result<(), Parse
                     }
                 },
                 None => {
-                    let mut res = LocaleStringList::default();
+                    let mut res = LocaleStringListInternal::default();
                     match parts.locale {
                         Some(locale) => {
                             res.variants.insert(locale, split);
@@ -461,13 +477,13 @@ fn fill_entry_val(entry: &mut DesktopEntry, parts: LinePart) -> Result<(), Parse
     Ok(())
 }
 
-fn process_entry_val_pair(line: &Line, entry: &mut DesktopEntry) -> Result<(), ParseError> {
+fn process_entry_val_pair(line: &Line, entry: &mut DesktopEntryInternal) -> Result<(), ParseError> {
     let parts = split_into_parts(line)?;
 
     fill_entry_val(entry, parts)
 }
 
-fn fill_action_val(action: &mut DesktopAction, parts: LinePart) -> Result<(), ParseError> {
+fn fill_action_val(action: &mut DesktopActionInternal, parts: LinePart) -> Result<(), ParseError> {
     match parts.key.as_str() {
         "Name" => set_optional_locale_str(parts, &mut action.name)?,
         "Exec" => set_optional_str(parts, &mut action.exec)?,
@@ -478,7 +494,10 @@ fn fill_action_val(action: &mut DesktopAction, parts: LinePart) -> Result<(), Pa
     Ok(())
 }
 
-fn process_action_val_pair(line: &Line, action: &mut DesktopAction) -> Result<(), ParseError> {
+fn process_action_val_pair(
+    line: &Line,
+    action: &mut DesktopActionInternal,
+) -> Result<(), ParseError> {
     let parts = split_into_parts(line)?;
 
     fill_action_val(action, parts)
@@ -488,7 +507,7 @@ fn key_err(msg: &str) -> Result<(), ParseError> {
     Err(ParseError::KeyError { msg: msg.into() })
 }
 
-fn check_locale_str(opt: &Option<LocaleString>, field: &str) -> Result<(), ParseError> {
+fn check_locale_str(opt: &Option<LocaleStringInternal>, field: &str) -> Result<(), ParseError> {
     match opt {
         Some(v) => {
             if v.default.is_none() {
@@ -501,7 +520,7 @@ fn check_locale_str(opt: &Option<LocaleString>, field: &str) -> Result<(), Parse
     }
 }
 
-fn check_entry(entry: &DesktopEntry) -> Result<(), ParseError> {
+fn check_entry(entry: &DesktopEntryInternal) -> Result<(), ParseError> {
     // check required items
     match entry.entry_type {
         Some(ref t) => {
@@ -537,16 +556,16 @@ fn check_entry(entry: &DesktopEntry) -> Result<(), ParseError> {
 }
 
 pub fn parse(input: &str) -> Result<DesktopFile, ParseError> {
-    let lines = filter_lines(input);
-    let result_entry = Rc::new(RefCell::new(DesktopEntry::default()));
+    let mut lines = filter_lines(input);
+    let result_entry = Rc::new(RefCell::new(DesktopEntryInternal::default()));
 
     let mut is_entry_found = false;
     let mut is_first_entry = true;
 
-    let mut result_actions: Vec<DesktopAction> = vec![];
+    let mut result_actions: Vec<DesktopActionInternal> = vec![];
     let mut current_target = EntryType::Entry(result_entry.clone());
 
-    for line in lines.iter() {
+    for line in lines.iter_mut() {
         match current_target {
             EntryType::Entry(ref entry) => match line.line_type() {
                 LineType::Header => {
@@ -581,7 +600,7 @@ pub fn parse(input: &str) -> Result<DesktopFile, ParseError> {
                                 });
                             }
 
-                            result_actions.push(DesktopAction {
+                            result_actions.push(DesktopActionInternal {
                                 ref_name: name,
                                 ..Default::default()
                             });
@@ -606,7 +625,7 @@ pub fn parse(input: &str) -> Result<DesktopFile, ParseError> {
                         });
                     }
                     Header::DesktopAction { name } => {
-                        result_actions.push(DesktopAction {
+                        result_actions.push(DesktopActionInternal {
                             ref_name: name,
                             ..Default::default()
                         });
@@ -626,8 +645,8 @@ pub fn parse(input: &str) -> Result<DesktopFile, ParseError> {
     check_entry(&entry)?;
 
     Ok(DesktopFile {
-        entry,
-        actions: result_actions,
+        entry: entry.into(),
+        actions: result_actions.into_iter().map(Into::into).collect(),
     })
 }
 
@@ -635,7 +654,6 @@ pub fn parse(input: &str) -> Result<DesktopFile, ParseError> {
 mod tests {
     use super::*;
 
-    #[ignore = "Already tested"]
     #[test]
     fn filter_lines_test() {
         let res = filter_lines("aaa你好 \n\n\n aaaa\n           #sadas")
@@ -645,5 +663,18 @@ mod tests {
 
         println!("{:?}", res);
         assert_eq!(vec!["aaa你好", "aaaa"], res);
+    }
+
+    #[test]
+    fn test_clense() {
+        let content = r#"
+Name = a
+Type = Application
+        "#;
+
+        let l = filter_lines(content);
+        let parts = split_into_parts(&l[0]).unwrap();
+        assert_eq!(parts.key, "Name".to_string());
+        assert_eq!(parts.value, "a".to_string());
     }
 }

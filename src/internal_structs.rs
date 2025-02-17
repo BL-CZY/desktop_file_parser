@@ -1,95 +1,36 @@
-use std::{collections::HashMap, path::PathBuf, str::FromStr};
+use std::collections::HashMap;
 
-use thiserror::Error;
-
-#[derive(Debug, Clone)]
-pub enum Header {
-    DesktopEntry,
-    DesktopAction { name: String },
-    Other { name: String },
-}
+use crate::{DesktopAction, DesktopEntry, EntryType, IconString, LocaleString, LocaleStringList};
 
 #[derive(Debug, Clone, Default)]
-pub struct LocaleString {
-    pub default: String, // required
+#[doc(hidden)]
+pub struct LocaleStringInternal {
+    pub default: Option<String>, // required
     pub variants: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct LocaleStringList {
-    pub default: Vec<String>,
+#[doc(hidden)]
+pub struct LocaleStringListInternal {
+    pub default: Option<Vec<String>>,
     pub variants: HashMap<String, Vec<String>>,
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct IconString {
-    pub content: String,
-}
-
-impl IconString {
-    pub fn get_icon_path(&self) -> Option<PathBuf> {
-        if let Ok(_) = std::fs::read(&self.content) {
-            Some(self.content.clone().into())
-        } else {
-            freedesktop_icons::lookup(&self.content).with_cache().find()
-        }
-    }
-}
-
-#[derive(Debug, Clone, Default)]
-pub enum EntryType {
-    #[default]
-    Application,
-    Link,
-    Directory,
-    Unknown(String),
-}
-
-impl FromStr for EntryType {
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self::from(s))
-    }
-
-    type Err = ();
-}
-
-impl From<&str> for EntryType {
-    fn from(value: &str) -> Self {
-        match value {
-            "Application" => Self::Application,
-            "Link" => Self::Link,
-            "Directory" => Self::Directory,
-            _ => Self::Unknown(value.into()),
-        }
-    }
-}
-
-impl ToString for EntryType {
-    fn to_string(&self) -> String {
-        match self {
-            Self::Application => "Application".into(),
-            Self::Link => "Link".into(),
-            Self::Directory => "Directory".into(),
-            Self::Unknown(s) => s.clone(),
-        }
-    }
-}
-
-/// Represents a desktop entry
-#[derive(Debug, Clone, Default)]
-pub struct DesktopEntry {
+#[doc(hidden)]
+pub struct DesktopEntryInternal {
     /// This specification defines 3 types of desktop entries: Application (type 1), Link (type 2) and Directory (type 3). To allow the addition of new types in the future, implementations should ignore desktop entries with an unknown type.
-    pub entry_type: EntryType, // required
+    pub entry_type: Option<EntryType>, // required
     /// Version of the Desktop Entry Specification that the desktop entry conforms with. Entries that confirm with this version of the specification should use 1.5. Note that the version field is not required to be present.
     pub version: Option<String>,
     /// Specific name of the application, for example "Mozilla".
-    pub name: LocaleString, // required
+    pub name: Option<LocaleStringInternal>, // required
     /// Generic name of the application, for example "Web Browser".
-    pub generic_name: Option<LocaleString>,
+    pub generic_name: Option<LocaleStringInternal>,
     /// NoDisplay means "this application exists, but don't display it in the menus". This can be useful to e.g. associate this application with MIME types, so that it gets launched from a file manager (or other apps), without having a menu entry for it (there are tons of good reasons for this, including e.g. the netscape -remote, or kfmclient openURL kind of stuff).
     pub no_display: Option<bool>,
     /// Tooltip for the entry, for example "View sites on the Internet". The value should not be redundant with the values of Name and GenericName.
-    pub comment: Option<LocaleString>,
+    pub comment: Option<LocaleStringInternal>,
     /// Icon to display in file manager, menus, etc. If the name is an absolute path, the given file will be used. If the name is not an absolute path, the algorithm described in the Icon Theme Specification will be used to locate the icon.
     pub icon: Option<IconString>,
     /// Hidden should have been called Deleted. It means the user deleted (at their level) something that was present (at an upper level, e.g. in the system dirs). It's strictly equivalent to the .desktop file not existing at all, as far as that user is concerned. This can also be used to "uninstall" existing files (e.g. due to a renaming) - by letting make install install a file with Hidden=true in it.
@@ -125,7 +66,7 @@ pub struct DesktopEntry {
     /// A list of interfaces that this application implements. By default, a desktop file implements no interfaces. See Interfaces for more information on how this works.
     pub implements: Option<Vec<String>>,
     /// A list of strings which may be used in addition to other metadata to describe this entry. This can be useful e.g. to facilitate searching through entries. The values are not meant for display, and should not be redundant with the values of Name or GenericName.
-    pub keywords: Option<LocaleStringList>,
+    pub keywords: Option<LocaleStringListInternal>,
     /// If true, it is KNOWN that the application will send a "remove" message when started with the DESKTOP_STARTUP_ID environment variable set. If false, it is KNOWN that the application does not work with startup notification at all (does not shown any window, breaks even when using StartupWMClass, etc.). If absent, a reasonable handling is up to implementations (assuming false, using StartupWMClass, etc.). (See the [Startup Notification Protocol Specification](https://www.freedesktop.org/wiki/Specifications/startup-notification-spec/) for more details).
     pub startup_notify: Option<bool>,
     /// If specified, it is known that the application will map at least one window with the given string as its WM class or WM name hint (see the [Startup Notification Protocol Specification](https://www.freedesktop.org/wiki/Specifications/startup-notification-spec/) for more details).
@@ -138,50 +79,81 @@ pub struct DesktopEntry {
     pub single_main_window: Option<bool>,
 }
 
-impl DesktopEntry {
-    pub fn derive_action(&self) -> DesktopAction {
-        DesktopAction {
-            ref_name: "".into(),
-            name: LocaleString::default(),
-            exec: None,
-            icon: self.icon.clone(),
-        }
-    }
-}
-
 #[derive(Default, Clone, Debug)]
-pub struct DesktopAction {
+#[doc(hidden)]
+pub struct DesktopActionInternal {
     pub ref_name: String,
-    pub name: LocaleString, // required
+    pub name: Option<LocaleStringInternal>, // required
     pub exec: Option<String>,
     pub icon: Option<IconString>,
 }
 
-#[derive(Default, Clone, Debug)]
-pub struct DesktopFile {
-    pub entry: DesktopEntry,
-    pub actions: Vec<DesktopAction>,
+impl Into<LocaleString> for LocaleStringInternal {
+    fn into(self) -> LocaleString {
+        LocaleString {
+            default: self.default.unwrap(),
+            variants: self.variants,
+        }
+    }
 }
 
-#[derive(Debug, Clone, Error)]
-pub enum ParseError {
-    #[error("Parse Error: Unacceptable character {ch:?} at line {row:?} column {col:?}, message: {msg:?}")]
-    UnacceptableCharacter {
-        ch: String,
-        row: usize,
-        col: usize,
-        msg: String,
-    },
-    #[error("Parse Error: Syntax error at line {row:?} column {col:?}, message: {msg:?}")]
-    Syntax { msg: String, row: usize, col: usize },
-    #[error("Parse Error: Repetitive entry at line {row:?} column {col:?}, message: {msg:?}. There should be only one entry on top of the file")]
-    RepetitiveEntry { msg: String, row: usize, col: usize },
-    #[error("Parse Error: Format error at line {row:?} column {col:?}, message: {msg:?}. The first heaedr should only be about an entry")]
-    FormatError { msg: String, row: usize, col: usize },
-    #[error("Parse Error: Internal error at line {row:?} column {col:?}, message: {msg:?}")]
-    InternalError { msg: String, row: usize, col: usize },
-    #[error("Parse Error: Repetitive declaration of key {key:?} and of entry or action at line {row:?} column {col:?}")]
-    RepetitiveKey { key: String, row: usize, col: usize },
-    #[error("Parse Error: Key Error, message: {msg:?}")]
-    KeyError { msg: String },
+impl Into<LocaleStringList> for LocaleStringListInternal {
+    fn into(self) -> LocaleStringList {
+        LocaleStringList {
+            default: self.default.unwrap(),
+            variants: self.variants,
+        }
+    }
+}
+
+impl Into<DesktopAction> for DesktopActionInternal {
+    fn into(self) -> DesktopAction {
+        DesktopAction {
+            ref_name: self.ref_name,
+            name: self.name.unwrap().into(),
+            exec: self.exec,
+            icon: self.icon,
+        }
+    }
+}
+
+impl Into<DesktopEntry> for DesktopEntryInternal {
+    fn into(self) -> DesktopEntry {
+        DesktopEntry {
+            entry_type: self.entry_type.unwrap(),
+            version: self.version,
+            name: self.name.unwrap().into(),
+            generic_name: match self.generic_name {
+                Some(l) => Some(l.into()),
+                None => None,
+            },
+            no_display: self.no_display,
+            comment: match self.comment {
+                Some(l) => Some(l.into()),
+                None => None,
+            },
+            icon: self.icon,
+            hidden: self.hidden,
+            only_show_in: self.only_show_in,
+            not_show_in: self.not_show_in,
+            dbus_activatable: self.dbus_activatable,
+            try_exec: self.try_exec,
+            exec: self.exec,
+            path: self.path,
+            terminal: self.terminal,
+            actions: self.actions,
+            mime_type: self.mime_type,
+            categories: self.categories,
+            implements: self.implements,
+            keywords: match self.keywords {
+                Some(l) => Some(l.into()),
+                None => None,
+            },
+            startup_notify: self.startup_notify,
+            startup_wm_class: self.startup_wm_class,
+            url: self.url,
+            prefers_non_default_gpu: self.prefers_non_default_gpu,
+            single_main_window: self.single_main_window,
+        }
+    }
 }
