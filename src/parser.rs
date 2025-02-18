@@ -158,7 +158,7 @@ struct LinePart {
 }
 
 fn split_into_parts(line: &Line) -> Result<LinePart, ParseError> {
-    #[cfg(debug_assertions)]
+    #[cfg(test)]
     println!("This line is: {:?}", line.to_string());
 
     enum State {
@@ -523,7 +523,7 @@ fn process_action_val_pair(
 /// Name=Firefox
 /// Exec=firefox %u"#;
 ///
-/// let desktop_file = parse(content)?;
+/// let desktop_file = freedesktop_file_parser::parse(content).unwrap();
 /// assert_eq!(desktop_file.entry.name.default, "Firefox");
 /// ```
 pub fn parse(input: &str) -> Result<DesktopFile, ParseError> {

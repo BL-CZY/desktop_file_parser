@@ -22,7 +22,7 @@ freedesktop-file-parser = "0.1.0"
 ### Basic Example
 
 ```rust
-use freedesktop_entry::parse;
+use freedesktop_file_parser::{parse, EntryType};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let content = r#"[Desktop Entry]
@@ -50,7 +50,7 @@ Categories=Network;WebBrowser;
 ### Handling Localized Strings
 
 ```rust
-use freedesktop_entry::LocaleString;
+use freedesktop_file_parser::LocaleString;
 
 // Access different translations
 if let Some(de_name) = desktop_file.entry.name.variants.get_variant("de") {

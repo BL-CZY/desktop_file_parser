@@ -72,7 +72,7 @@ dependencies = [
 
 [[package]]
 name = "freedesktop-file-parser"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "freedesktop-icons",
  "thiserror 2.0.7",
