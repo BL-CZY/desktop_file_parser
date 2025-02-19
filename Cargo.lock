@@ -52,7 +52,7 @@ dependencies = [
 
 [[package]]
 name = "freedesktop-file-parser"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "thiserror",
  "xdgkit",
