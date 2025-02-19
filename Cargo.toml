@@ -10,5 +10,5 @@ documentation = "https://github.com/BL-CZY/desktop_file_parser?tab=readme-ov-fil
 description = "Freedesktop Desktop Entry Parser"
 
 [dependencies]
-freedesktop-icons = "0.2.6"
 thiserror = "2.0.7"
+xdgkit = "3.2.5"

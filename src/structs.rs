@@ -67,7 +67,7 @@ impl IconString {
         if let Ok(_) = std::fs::read(&self.content) {
             Some(self.content.clone().into())
         } else {
-            freedesktop_icons::lookup(&self.content).with_cache().find()
+            xdgkit::icon_finder::find_icon(self.content.clone(), 48, 1)
         }
     }
 }
