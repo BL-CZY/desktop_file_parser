@@ -11,4 +11,4 @@ description = "Freedesktop Desktop Entry Parser"
 
 [dependencies]
 thiserror = "2.0.7"
-xdgkit = "3.2.5"
+freedesktop-icons = "0.4.0"
