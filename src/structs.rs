@@ -3,7 +3,7 @@
 //! Desktop entries are used to describe applications, shortcuts, and directories in desktop environments.
 
 use std::{collections::HashMap, path::PathBuf, str::FromStr};
-
+use std::fmt::Display;
 use thiserror::Error;
 
 /// A string that can have different values based on the system locale.
@@ -64,7 +64,7 @@ impl IconString {
     /// - `Some(PathBuf)` if the icon is found either as a file or in the icon theme
     /// - `None` if the icon cannot be found
     pub fn get_icon_path(&self) -> Option<PathBuf> {
-        if let Ok(_) = std::fs::read(&self.content) {
+        if std::fs::read(&self.content).is_ok() {
             Some(self.content.clone().into())
         } else {
             freedesktop_icons::lookup(&self.content)
@@ -117,6 +117,9 @@ pub struct LinkFields {
 
 /// The type of desktop entry, which determines its behavior and required fields.
 #[derive(Debug, Clone, Default)]
+// Clippy suggests using Box<ApplicationFields> for Application instead 
+// but this would break compatibility, so we disable the warning.
+#[allow(clippy::large_enum_variant)]
 pub enum EntryType {
     /// An application that can be launched
     Application(ApplicationFields),
@@ -130,13 +133,13 @@ pub enum EntryType {
 }
 
 impl FromStr for EntryType {
+    type Err = ();
+
     /// Converts a string to an EntryType.
     /// Never fails as unknown types become EntryType::Unknown.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self::from(s))
     }
-
-    type Err = ();
 }
 
 impl From<&str> for EntryType {
@@ -153,16 +156,15 @@ impl From<&str> for EntryType {
     }
 }
 
-impl ToString for EntryType {
-    /// Converts an EntryType to its string representation.
-    /// Returns "Application", "Link", "Directory", or "Unknown".
-    fn to_string(&self) -> String {
-        match self {
-            Self::Application(_) => "Application".into(),
-            Self::Link(_) => "Link".into(),
-            Self::Directory => "Directory".into(),
-            Self::Unknown => "Unknown".into(),
-        }
+impl Display for EntryType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            Self::Application(_) => "Application",
+            Self::Link(_) => "Link",
+            Self::Directory => "Directory",
+            Self::Unknown => "Unknown",
+        };
+        write!(f, "{str}")
     }
 }
 

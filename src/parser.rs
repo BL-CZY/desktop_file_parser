@@ -1,5 +1,5 @@
 use crate::internal_structs::vec_to_map;
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc};
 
 use crate::{
     internal_structs::{
@@ -55,13 +55,12 @@ impl<'a> Line<'a> {
         }
     }
 }
-
-impl<'a> ToString for Line<'a> {
-    fn to_string(&self) -> String {
-        self.content
-            .iter()
-            .map(|ch| ch.content.to_string())
-            .collect()
+impl<'a> fmt::Display for Line<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for ch in &self.content {
+            write!(f, "{}", ch.content)?;
+        }
+        Ok(())
     }
 }
 
@@ -76,7 +75,7 @@ fn filter_lines(input: &str) -> Vec<Line> {
     input
         .split("\n")
         .enumerate()
-        .filter(|element| element.1 != "" && !element.1.trim().starts_with("#"))
+        .filter(|element| !element.1.is_empty() && !element.1.trim().starts_with("#"))
         .map(|(num, l)| Line::from_data(l, num))
         .collect()
 }
@@ -241,9 +240,7 @@ fn split_into_parts(line: &Line) -> Result<LinePart, ParseError> {
                 }
             },
 
-            State::Value => match ch.content {
-                _ => result.value.push_str(ch.content),
-            },
+            State::Value => result.value.push_str(ch.content),
         }
     }
 
@@ -290,25 +287,29 @@ fn set_optional_locale_str(
     match opt {
         Some(str) => set_locale_str(parts, str),
 
-        None => Ok({
-            let mut inner = LocaleStringInternal::default();
+        None => {
+            {
+                let mut inner = LocaleStringInternal::default();
 
-            set_locale_str(parts, &mut inner)?;
+                set_locale_str(parts, &mut inner)?;
 
-            *opt = Some(inner);
-        }),
+                *opt = Some(inner);
+            };
+            Ok(())
+        },
     }
 }
 
 fn set_bool(parts: LinePart, val: &mut bool) -> Result<(), ParseError> {
-    Ok(*val = parts
-        .value
-        .parse::<bool>()
-        .map_err(|_| ParseError::Syntax {
-            msg: "Property's value needs to be bool".into(),
-            row: parts.line_number,
-            col: 0,
-        })?)
+    *val = parts
+    .value
+    .parse::<bool>()
+    .map_err(|_| ParseError::Syntax {
+        msg: "Property's value needs to be bool".into(),
+        row: parts.line_number,
+        col: 0,
+    })?;
+    Ok(())
 }
 
 fn set_optional_bool(parts: LinePart, opt: &mut Option<bool>) -> Result<(), ParseError> {
@@ -340,7 +341,7 @@ fn set_optional_list(parts: LinePart, opt: &mut Option<Vec<String>>) -> Result<(
         });
     }
 
-    Ok(*opt = Some({
+    *opt = Some({
         let mut res = parts
             .value
             .split(";")
@@ -348,13 +349,14 @@ fn set_optional_list(parts: LinePart, opt: &mut Option<Vec<String>>) -> Result<(
             .collect::<Vec<String>>();
 
         if let Some(val) = res.last() {
-            if val == "" {
+            if val.is_empty() {
                 res.pop();
             }
         }
 
         res
-    }))
+    });
+    Ok(())
 }
 
 fn set_optional_str(parts: LinePart, opt: &mut Option<String>) -> Result<(), ParseError> {
@@ -366,7 +368,8 @@ fn set_optional_str(parts: LinePart, opt: &mut Option<String>) -> Result<(), Par
         });
     }
 
-    Ok(*opt = Some(parts.value))
+    *opt = Some(parts.value);
+    Ok(())
 }
 
 fn set_optional_icon_str(parts: LinePart, opt: &mut Option<IconString>) -> Result<(), ParseError> {
@@ -378,15 +381,16 @@ fn set_optional_icon_str(parts: LinePart, opt: &mut Option<IconString>) -> Resul
         });
     }
 
-    Ok(*opt = Some(IconString {
+    *opt = Some(IconString {
         content: parts.value,
-    }))
+    });
+    Ok(())
 }
 
 fn fill_entry_val(entry: &mut DesktopEntryInternal, parts: LinePart) -> Result<(), ParseError> {
     match parts.key.as_str() {
         "Type" => {
-            if !entry.entry_type.is_none() {
+            if entry.entry_type.is_some() {
                 return Err(ParseError::RepetitiveKey {
                     key: "Type".into(),
                     row: parts.line_number,
@@ -424,7 +428,7 @@ fn fill_entry_val(entry: &mut DesktopEntryInternal, parts: LinePart) -> Result<(
                 .collect::<Vec<String>>();
 
             if let Some(val) = split.last() {
-                if val == "" {
+                if val.is_empty() {
                     split.pop();
                 }
             }
@@ -443,7 +447,7 @@ fn fill_entry_val(entry: &mut DesktopEntryInternal, parts: LinePart) -> Result<(
                         kwds.variants.insert(locale, split);
                     }
                     None => {
-                        if !kwds.default.is_none() {
+                        if kwds.default.is_some() {
                             return Err(ParseError::RepetitiveKey {
                                 key: "Keywords".into(),
                                 row: parts.line_number,
@@ -582,12 +586,12 @@ pub fn parse(input: &str) -> Result<DesktopFile, ParseError> {
                     };
                 }
                 LineType::ValPair => {
-                    process_entry_val_pair(&line, &mut entry.borrow_mut())?;
+                    process_entry_val_pair(line, &mut entry.borrow_mut())?;
                 }
             },
 
             EntryType::Action(index) => match line.line_type() {
-                LineType::Header => match parse_header(&line)? {
+                LineType::Header => match parse_header(line)? {
                     Header::DesktopEntry => {
                         return Err(ParseError::RepetitiveEntry {
                             msg: "There should only be one entry on top".into(),

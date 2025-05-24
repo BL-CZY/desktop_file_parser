@@ -164,39 +164,36 @@ pub fn vec_to_map(
     list.sort();
 
     for action in vec.into_iter() {
-        match list.binary_search(&action.ref_name) {
-            Ok(_) => {
-                if result.contains_key(&action.ref_name) {
-                    return Err(ParseError::KeyError {
-                        msg: format!(
-                            "There are two actions with the same name: {}",
-                            &action.ref_name
-                        ),
-                    });
-                }
-
-                let name = action.ref_name.clone();
-
-                result.insert(
-                    action.ref_name,
-                    DesktopAction {
-                        name: match action.name {
-                            Some(n) => n.try_into()?,
-                            None => {
-                                return Err(ParseError::KeyError {
-                                    msg: format!(
-                                        "The name of the action {} must be specified",
-                                        name
-                                    ),
-                                })
-                            }
-                        },
-                        exec: action.exec,
-                        icon: action.icon,
-                    },
-                );
+        if list.binary_search(&action.ref_name).is_ok() {
+            if result.contains_key(&action.ref_name) {
+                return Err(ParseError::KeyError {
+                    msg: format!(
+                        "There are two actions with the same name: {}",
+                        &action.ref_name
+                    ),
+                });
             }
-            Err(_) => {}
+
+            let name = action.ref_name.clone();
+
+            result.insert(
+                action.ref_name,
+                DesktopAction {
+                    name: match action.name {
+                        Some(n) => n.try_into()?,
+                        None => {
+                            return Err(ParseError::KeyError {
+                                msg: format!(
+                                    "The name of the action {} must be specified",
+                                    name
+                                ),
+                            })
+                        }
+                    },
+                    exec: action.exec,
+                    icon: action.icon,
+                },
+            );
         }
     }
 
