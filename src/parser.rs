@@ -296,19 +296,19 @@ fn set_optional_locale_str(
                 *opt = Some(inner);
             };
             Ok(())
-        },
+        }
     }
 }
 
 fn set_bool(parts: LinePart, val: &mut bool) -> Result<(), ParseError> {
     *val = parts
-    .value
-    .parse::<bool>()
-    .map_err(|_| ParseError::Syntax {
-        msg: "Property's value needs to be bool".into(),
-        row: parts.line_number,
-        col: 0,
-    })?;
+        .value
+        .parse::<bool>()
+        .map_err(|_| ParseError::Syntax {
+            msg: "Property's value needs to be bool".into(),
+            row: parts.line_number,
+            col: 0,
+        })?;
     Ok(())
 }
 

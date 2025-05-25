@@ -2,8 +2,8 @@
 //! [freedesktop.org Desktop Entry Specification](https://specifications.freedesktop.org/desktop-entry-spec/latest/).
 //! Desktop entries are used to describe applications, shortcuts, and directories in desktop environments.
 
-use std::{collections::HashMap, path::PathBuf, str::FromStr};
 use std::fmt::Display;
+use std::{collections::HashMap, path::PathBuf, str::FromStr};
 use thiserror::Error;
 
 /// A string that can have different values based on the system locale.
@@ -117,7 +117,7 @@ pub struct LinkFields {
 
 /// The type of desktop entry, which determines its behavior and required fields.
 #[derive(Debug, Clone, Default)]
-// Clippy suggests using Box<ApplicationFields> for Application instead 
+// Clippy suggests using Box<ApplicationFields> for Application instead
 // but this would break compatibility, so we disable the warning.
 #[allow(clippy::large_enum_variant)]
 pub enum EntryType {
