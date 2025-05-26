@@ -183,10 +183,7 @@ pub fn vec_to_map(
                         Some(n) => n.try_into()?,
                         None => {
                             return Err(ParseError::KeyError {
-                                msg: format!(
-                                    "The name of the action {} must be specified",
-                                    name
-                                ),
+                                msg: format!("The name of the action {} must be specified", name),
                             })
                         }
                     },
