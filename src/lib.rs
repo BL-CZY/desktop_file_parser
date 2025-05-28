@@ -33,6 +33,27 @@ Categories=Network;WebBrowser;
     }
 
     #[test]
+    fn test_startup_wm_class() {
+        let content = r#"
+[Desktop Entry]
+Name=Spotify
+Exec=spotify %U
+Type=Application
+Categories=Audio;Music;Player;AudioVideo;
+StartupWMClass=spotify
+"#;
+        let f = parse(content).unwrap();
+        let entry = f.entry;
+
+        match entry.entry_type {
+            EntryType::Application(fields) => {
+                assert_eq!(fields.startup_wm_class.unwrap(), "spotify");
+            }
+            _ => panic!("Entry type is not Application"),
+        }
+    }
+
+    #[test]
     fn test_localized_strings() {
         let content = r#"
 [Desktop Entry]

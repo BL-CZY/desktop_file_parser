@@ -474,7 +474,7 @@ fn fill_entry_val(entry: &mut DesktopEntryInternal, parts: LinePart) -> Result<(
             }
         }
         "StartupNotify" => set_optional_bool(parts, &mut entry.startup_notify)?,
-        "StartupWmClass" => set_optional_str(parts, &mut entry.startup_wm_class)?,
+        "StartupWMClass" => set_optional_str(parts, &mut entry.startup_wm_class)?,
         "URL" => set_optional_str(parts, &mut entry.url)?,
         "PrefersNonDefaultGPU" => set_optional_bool(parts, &mut entry.prefers_non_default_gpu)?,
         "SingleMainWindow" => set_optional_bool(parts, &mut entry.single_main_window)?,
