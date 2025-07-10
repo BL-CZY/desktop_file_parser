@@ -16,7 +16,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-freedesktop-file-parser = "0.1.0"
+freedesktop-file-parser = "0.3.0"
 ```
 
 ### Basic Example
