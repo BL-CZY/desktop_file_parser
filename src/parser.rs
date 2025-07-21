@@ -541,6 +541,9 @@ pub fn parse(input: &str) -> Result<DesktopFile, ParseError> {
     let mut current_target = EntryType::Entry(result_entry.clone());
 
     for line in lines.iter_mut() {
+        if line.content.len() == 0 {
+            continue;
+        }
         match current_target {
             EntryType::Entry(ref entry) => match line.line_type() {
                 LineType::Header => {
