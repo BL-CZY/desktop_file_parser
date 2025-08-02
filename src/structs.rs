@@ -76,6 +76,7 @@ pub enum IconIdentifier {
     Name(String),
 }
 
+#[cfg(feature = "resolve-icons")]
 impl IconIdentifier {
     /// Returns a path to the icon by looking up the icon in the freedesktop icon system if
     /// necessary, with size=48 and scale=1 as defaults
