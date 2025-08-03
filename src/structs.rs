@@ -76,8 +76,18 @@ pub enum IconIdentifier {
     Name(String),
 }
 
-#[cfg(feature = "resolve-icons")]
 impl IconIdentifier {
+    pub fn resolve<F>(self, resolver: F) -> Option<PathBuf>
+    where
+        F: FnOnce(String) -> Option<PathBuf>,
+    {
+        match self {
+            Self::Path(path) => Some(path),
+            Self::Name(name) => resolver(name),
+        }
+    }
+
+    #[cfg(feature = "resolve-icons")]
     /// Returns a path to the icon by looking up the icon in the freedesktop icon system if
     /// necessary, with size=48 and scale=1 as defaults
     ///
