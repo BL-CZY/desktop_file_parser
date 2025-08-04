@@ -55,23 +55,51 @@ pub struct IconString {
 }
 
 impl IconString {
-    /// Attempts to find the icon's full path on the system.
-    ///
-    /// First checks if the content is a direct path to an existing file.
-    /// If not, looks up the icon name in the freedesktop icon theme system.
-    ///
-    /// # Returns
-    /// - `Some(PathBuf)` if the icon is found either as a file or in the icon theme
-    /// - `None` if the icon cannot be found
-    pub fn get_icon_path(&self) -> Option<PathBuf> {
-        if std::fs::read(&self.content).is_ok() {
-            Some(self.content.clone().into())
+    /// Converts the IconString to an IconIdentifier
+    /// by optimistically checking if it represents a valid path to a file on disk,
+    /// and assuming it is a name otherwise
+    pub fn to_identifier(self) -> IconIdentifier {
+        let path = PathBuf::from(&self.content);
+        if path.is_file() {
+            IconIdentifier::Path(path)
         } else {
-            freedesktop_icons::lookup(&self.content)
+            IconIdentifier::Name(self.content)
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum IconIdentifier {
+    /// An absolute path to the icon on disk
+    Path(PathBuf),
+    /// An icon name in the system theme
+    Name(String),
+}
+
+impl IconIdentifier {
+    pub fn resolve<F>(self, resolver: F) -> Option<PathBuf>
+    where
+        F: FnOnce(String) -> Option<PathBuf>,
+    {
+        match self {
+            Self::Path(path) => Some(path),
+            Self::Name(name) => resolver(name),
+        }
+    }
+
+    #[cfg(feature = "resolve-icons")]
+    /// Returns a path to the icon by looking up the icon in the freedesktop icon system if
+    /// necessary, with size=48 and scale=1 as defaults
+    ///
+    /// Returns None if an icon cannot be found
+    pub fn resolve_with_defaults(self) -> Option<PathBuf> {
+        Some(match self {
+            Self::Path(path) => path,
+            Self::Name(name) => freedesktop_icons::lookup(&name)
                 .with_size(48)
                 .with_scale(1)
-                .find()
-        }
+                .find()?,
+        })
     }
 }
 
@@ -242,7 +270,7 @@ pub enum ParseError {
     Syntax { msg: String, row: usize, col: usize },
     #[error("Parse Error: Repetitive entry at line {row:?} column {col:?}, message: {msg:?}. There should be only one entry on top of the file")]
     RepetitiveEntry { msg: String, row: usize, col: usize },
-    #[error("Parse Error: Format error at line {row:?} column {col:?}, message: {msg:?}. The first heaedr should only be about an entry")]
+    #[error("Parse Error: Format error at line {row:?} column {col:?}, message: {msg:?}. The first header should only be about an entry")]
     FormatError { msg: String, row: usize, col: usize },
     #[error("Parse Error: Internal error at line {row:?} column {col:?}, message: {msg:?}")]
     InternalError { msg: String, row: usize, col: usize },
