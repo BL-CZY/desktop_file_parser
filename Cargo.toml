@@ -5,7 +5,6 @@ edition = "2021"
 authors = ["David Huang jiguangllsw@gmail.com"]
 license = "MIT"
 repository = "https://github.com/BL-CZY/desktop_file_parser"
-documentation = "https://github.com/BL-CZY/desktop_file_parser?tab=readme-ov-file#freedesktop-desktop-entry-parser"
 description = "Freedesktop Desktop Entry Parser"
 
 [dependencies]
